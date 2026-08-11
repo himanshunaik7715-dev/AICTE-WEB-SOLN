@@ -1,0 +1,8 @@
+{
+  "name": "Remix TCET AICTE Activity Diary \u0026 Portfolio",
+  "description": "Semester-wise AICTE Points tracking with two-stage CR \u0026 TGM verification and official 28-page Activity Diary PDF exporter.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
