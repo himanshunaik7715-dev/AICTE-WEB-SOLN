@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CertificateSubmission, Semester } from '../types';
+import { CertificateSubmission, Semester, UserProfile } from '../types';
 import { SEMESTER_TARGETS, AICTE_CATEGORIES } from '../constants/aicteData';
 import {
   UserCheck,
@@ -17,6 +17,7 @@ import {
 
 interface CRReviewPortalProps {
   submissions: CertificateSubmission[];
+  activeProfile?: UserProfile;
   onValidateByCR: (id: string) => void;
   onRequestResubmission: (id: string, remarks: string) => void;
   onViewDetails: (sub: CertificateSubmission) => void;
@@ -24,6 +25,7 @@ interface CRReviewPortalProps {
 
 export const CRReviewPortal: React.FC<CRReviewPortalProps> = ({
   submissions,
+  activeProfile,
   onValidateByCR,
   onRequestResubmission,
   onViewDetails,
@@ -66,7 +68,7 @@ export const CRReviewPortal: React.FC<CRReviewPortalProps> = ({
           <div className="space-y-1.5 max-w-2xl">
             <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-md border border-indigo-100">
               <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
-              Stage-1 Review Queue — Class Representative (CR)
+              Stage-1 Review Queue — {activeProfile?.customRole || activeProfile?.name || 'Class Representative (CR)'}
             </div>
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
               Student Activity Verification Portal

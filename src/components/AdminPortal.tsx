@@ -255,7 +255,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   const allPendingRequests = Array.from(pendingRequestsMap.values());
   const pendingSuperAdminRequests = allPendingRequests.filter((r) => r.role === 'superadmin');
-  const pendingTgmRequests = allPendingRequests.filter((r) => r.role === 'admin');
+  const pendingTgmRequests = allPendingRequests.filter((r) => r.role !== 'superadmin');
 
   // Render pending authorization notice if user signed up as Super Admin and is not yet approved
   if (studentProfile.role === 'superadmin' && !isApprovedSuperAdmin) {

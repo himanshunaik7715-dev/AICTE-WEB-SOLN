@@ -56,9 +56,10 @@ export const SEEDED_PROFILES: UserProfile[] = [
     driveRootFolderId: 'drive_folder_amit_patel_2023',
   },
   {
-    id: 'CR-2023011100',
-    name: 'Ananya Verma (Class Representative)',
-    email: 'cr_it_a@tcetmumbai.in',
+    id: 'CR-TCET-2026',
+    name: 'Class Representative (CR)',
+    email: 'cr@tcetmumbai.in',
+    password: '2026@tcetiotcr',
     role: 'cr',
     rollNo: '7',
     erpNo: '2023011100',
@@ -66,8 +67,9 @@ export const SEEDED_PROFILES: UserProfile[] = [
     division: 'A',
     academicBatch: '2023-2027',
     tgmName: 'Prof. S. K. Mehta (TGM)',
-    crName: 'Ananya Verma (CR)',
-    driveRootFolderId: 'drive_folder_ananya_verma_cr',
+    crName: 'Class Representative (CR)',
+    tgmApprovalStatus: 'approved',
+    driveRootFolderId: 'drive_folder_cr_tcet',
   },
   {
     id: 'TGM-1001',
@@ -96,10 +98,27 @@ export const SEEDED_PROFILES: UserProfile[] = [
   },
 ];
 
+function loadUsersFromLocalStorage(): UserProfile[] {
+  const users = loadFromLocalStorage<UserProfile[]>(LS_USERS_KEY, SEEDED_PROFILES);
+  const crExists = users.some((u) => u.email.toLowerCase() === 'cr@tcetmumbai.in');
+  if (!crExists) {
+    const defaultCr = SEEDED_PROFILES.find((u) => u.email.toLowerCase() === 'cr@tcetmumbai.in');
+    if (defaultCr) users.push(defaultCr);
+  } else {
+    const cr = users.find((u) => u.email.toLowerCase() === 'cr@tcetmumbai.in');
+    if (cr) {
+      cr.password = '2026@tcetiotcr';
+      cr.tgmApprovalStatus = 'approved';
+    }
+  }
+  return users;
+}
+
 // In-Memory state caches
 let cachedSubmissions: CertificateSubmission[] = loadFromLocalStorage(LS_SUBMISSIONS_KEY, INITIAL_SUBMISSIONS);
-let cachedUsers: UserProfile[] = loadFromLocalStorage(LS_USERS_KEY, SEEDED_PROFILES);
+let cachedUsers: UserProfile[] = loadUsersFromLocalStorage();
 let cachedAdmins: AdminUser[] = loadFromLocalStorage(LS_ADMINS_KEY, INITIAL_ADMINS);
+
 
 // Listeners
 const submissionListeners: Array<(subs: CertificateSubmission[]) => void> = [];
@@ -464,16 +483,41 @@ export async function getUserProfileByEmail(email: string): Promise<UserProfile 
 }
 
 /**
- * Approve a TGM or Super Admin account request (Super Admin action)
+ * Approve a TGM, CR, Club Head, or Super Admin account request (Super Admin action)
  */
 export async function approveTgmUserInDb(
   userIdOrEmail: string,
   approvedBy: string = 'Super Admin'
 ): Promise<void> {
-  // Update in Users cache
-  const userIdx = cachedUsers.findIndex(
-    (u) => u.id === userIdOrEmail || u.email.toLowerCase() === userIdOrEmail.toLowerCase()
+  const normKey = userIdOrEmail.trim().toLowerCase();
+
+  // Search in cachedUsers by id or email
+  let userIdx = cachedUsers.findIndex(
+    (u) => u.id === userIdOrEmail || u.email.trim().toLowerCase() === normKey
   );
+
+  // Fallback search via DB or localStorage
+  if (userIdx === -1) {
+    const dbProfile = await getUserProfileByEmail(normKey);
+    if (dbProfile) {
+      const existingIdx = cachedUsers.findIndex((u) => u.id === dbProfile.id);
+      if (existingIdx !== -1) {
+        userIdx = existingIdx;
+      } else {
+        cachedUsers.push(dbProfile);
+        userIdx = cachedUsers.length - 1;
+      }
+    }
+  }
+
+  // Also check in cachedAdmins whitelist
+  const adminIdx = cachedAdmins.findIndex(
+    (a) => a.id === userIdOrEmail || a.email.trim().toLowerCase() === normKey
+  );
+  const matchedAdmin = adminIdx !== -1 ? cachedAdmins[adminIdx] : null;
+
+  // If user profile found in cachedUsers, update status
+  let matchedUser: UserProfile | null = null;
   if (userIdx !== -1) {
     cachedUsers[userIdx] = {
       ...cachedUsers[userIdx],
@@ -481,17 +525,37 @@ export async function approveTgmUserInDb(
       approvedBy,
       approvedAt: new Date().toISOString(),
     };
+    matchedUser = cachedUsers[userIdx];
     notifyUsers();
+  } else if (matchedAdmin) {
+    // If user profile wasn't in cachedUsers, construct it from matchedAdmin so it exists and can log in!
+    const newlyCreatedUser: UserProfile = {
+      id: matchedAdmin.id,
+      name: matchedAdmin.name,
+      email: matchedAdmin.email.trim().toLowerCase(),
+      role: matchedAdmin.designation.includes('TGM') ? 'admin' : 'cr',
+      customRole: matchedAdmin.designation.replace(' (Club Head)', '').replace(' (CR / Club Head)', ''),
+      rollNo: 'CH-01',
+      erpNo: `ERP-${Date.now().toString().slice(-6)}`,
+      department: matchedAdmin.department || 'Internet of Things (IoT)',
+      division: 'All Divisions',
+      academicBatch: '2023-2027',
+      tgmApprovalStatus: 'approved',
+      approvedBy,
+      approvedAt: new Date().toISOString(),
+    };
+    cachedUsers.push(newlyCreatedUser);
+    matchedUser = newlyCreatedUser;
+    notifyUsers();
+    await saveUserProfileToDb(newlyCreatedUser);
   }
-
-  // Update or add in Admins whitelist cache
-  const matchedUser = userIdx !== -1 ? cachedUsers[userIdx] : null;
-  const adminIdx = cachedAdmins.findIndex(
-    (a) => a.id === userIdOrEmail || a.email.toLowerCase() === userIdOrEmail.toLowerCase()
-  );
 
   const designation = matchedUser?.role === 'superadmin'
     ? 'Principal & Super Admin'
+    : matchedUser?.customRole
+    ? `${matchedUser.customRole} (Club Head)`
+    : matchedUser?.role === 'cr'
+    ? 'Class Representative (CR)'
     : 'Teacher Guardian Mentor (TGM)';
 
   if (adminIdx !== -1) {
@@ -501,20 +565,6 @@ export async function approveTgmUserInDb(
       isWhitelisted: true,
       approvalStatus: 'approved',
     };
-    notifyAdmins();
-  } else if (matchedUser) {
-    const newAdmin: AdminUser = {
-      id: matchedUser.id,
-      email: matchedUser.email,
-      name: matchedUser.name,
-      designation: designation,
-      department: matchedUser.department || 'Institutional Head Office',
-      addedBy: approvedBy,
-      addedAt: new Date().toISOString().split('T')[0],
-      isWhitelisted: true,
-      approvalStatus: 'approved',
-    };
-    cachedAdmins.push(newAdmin);
     notifyAdmins();
   }
 
@@ -527,23 +577,25 @@ export async function approveTgmUserInDb(
     }
   }
 
-  // Dispatch TGM Approval Email via Resend Queue
-  const tgmEmail = matchedUser?.email || (adminIdx !== -1 ? cachedAdmins[adminIdx].email : userIdOrEmail);
-  const tgmName = matchedUser?.name || (adminIdx !== -1 ? cachedAdmins[adminIdx].name : 'Faculty Member');
+  // Dispatch Approval Email via Resend Queue
+  const tgmEmail = matchedUser?.email || (matchedAdmin ? matchedAdmin.email : userIdOrEmail);
+  const tgmName = matchedUser?.name || (matchedAdmin ? matchedAdmin.name : 'Faculty / Club Member');
   sendTgmApprovalNotification({
     tgmEmail,
     tgmName,
     status: 'approved',
     approvedBy,
-  }).catch((e) => console.warn('TGM approval email send notice:', e));
+  }).catch((e) => console.warn('Approval email send notice:', e));
 }
 
 /**
- * Reject a TGM account request (Super Admin action)
+ * Reject an account request (Super Admin action)
  */
 export async function rejectTgmUserInDb(userIdOrEmail: string): Promise<void> {
+  const normKey = userIdOrEmail.trim().toLowerCase();
+
   const userIdx = cachedUsers.findIndex(
-    (u) => u.id === userIdOrEmail || u.email.toLowerCase() === userIdOrEmail.toLowerCase()
+    (u) => u.id === userIdOrEmail || u.email.trim().toLowerCase() === normKey
   );
   if (userIdx !== -1) {
     cachedUsers[userIdx] = {
@@ -554,7 +606,7 @@ export async function rejectTgmUserInDb(userIdOrEmail: string): Promise<void> {
   }
 
   const adminIdx = cachedAdmins.findIndex(
-    (a) => a.id === userIdOrEmail || a.email.toLowerCase() === userIdOrEmail.toLowerCase()
+    (a) => a.id === userIdOrEmail || a.email.trim().toLowerCase() === normKey
   );
   if (adminIdx !== -1) {
     cachedAdmins[adminIdx] = {
@@ -574,14 +626,14 @@ export async function rejectTgmUserInDb(userIdOrEmail: string): Promise<void> {
     }
   }
 
-  // Dispatch TGM Rejection Email via Resend Queue
   const matchedUser = userIdx !== -1 ? cachedUsers[userIdx] : null;
   const tgmEmail = matchedUser?.email || (adminIdx !== -1 ? cachedAdmins[adminIdx].email : userIdOrEmail);
-  const tgmName = matchedUser?.name || (adminIdx !== -1 ? cachedAdmins[adminIdx].name : 'Faculty Member');
+  const tgmName = matchedUser?.name || (adminIdx !== -1 ? cachedAdmins[adminIdx].name : 'Faculty / Club Member');
   sendTgmApprovalNotification({
     tgmEmail,
     tgmName,
     status: 'rejected',
     approvedBy: 'Super Admin Office',
-  }).catch((e) => console.warn('TGM rejection email send notice:', e));
+  }).catch((e) => console.warn('Rejection email send notice:', e));
 }
+

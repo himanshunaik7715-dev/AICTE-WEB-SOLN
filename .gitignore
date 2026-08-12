@@ -3,6 +3,18 @@ build/
 dist/
 coverage/
 .DS_Store
+
+# Logs
 *.log
-.env*
+
+# Environment variables
+.env
+.env.*
 !.env.example
+
+# Google OAuth credentials
+src/client_secret_*.json
+
+# Service-account / credential files
+*service-account*.json
+*credentials*.json

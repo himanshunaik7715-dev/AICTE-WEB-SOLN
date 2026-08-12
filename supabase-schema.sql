@@ -52,6 +52,8 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "driveRootFolderId" TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "tgmApprovalStatus" TEXT DEFAULT 'approved';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "approvedBy" TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "approvedAt" TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "customRole" TEXT;
 
 
 -- 2. Create or Update Whitelisted / Pending Admins Table

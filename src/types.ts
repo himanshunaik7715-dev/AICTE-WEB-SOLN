@@ -37,6 +37,8 @@ export interface UserProfile {
   tgmApprovalStatus?: 'pending' | 'approved' | 'rejected';
   approvedBy?: string;
   approvedAt?: string;
+  customRole?: string; // For CR/Club Heads: e.g. "NSS Head", "Cultural Secretary", "Tech Club President"
+  password?: string; // Password for manual credential login (CR / Club Heads)
 }
 
 export interface AICTECategory {

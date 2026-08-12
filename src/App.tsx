@@ -33,6 +33,7 @@ import { SubmissionDetailsModal } from './components/SubmissionDetailsModal';
 import { AuthModal } from './components/AuthModal';
 import { AuthPage } from './components/AuthPage';
 import { SuperAdminAuthPage } from './components/SuperAdminAuthPage';
+import { RoleSelectionPage } from './components/RoleSelectionPage';
 import { StorageExplorerModal } from './components/StorageExplorerModal';
 
 const SESSION_STORAGE_KEY = 'tcet_active_session';
@@ -40,6 +41,8 @@ const SESSION_STORAGE_KEY = 'tcet_active_session';
 export default function App() {
   const [currentRole, setCurrentRole] = useState<UserRole | 'auth'>('auth');
   const [activeProfile, setActiveProfile] = useState<UserProfile>(DEFAULT_STUDENT);
+  // Which role the user picked on the landing screen (null = show landing)
+  const [selectedEntryRole, setSelectedEntryRole] = useState<'student' | 'cr' | 'admin' | null>(null);
   const [isSuperAdminRoute, setIsSuperAdminRoute] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return (
@@ -154,6 +157,7 @@ export default function App() {
     }
     setActiveProfile(DEFAULT_STUDENT);
     setCurrentRole('auth');
+    setSelectedEntryRole(null); // Return to role selection screen
   };
 
   // Re-seed Database explicit handler
@@ -515,6 +519,7 @@ export default function App() {
         {currentRole === 'cr' && (
           <CRReviewPortal
             submissions={submissions}
+            activeProfile={activeProfile}
             onValidateByCR={handleValidateByCR}
             onRequestResubmission={handleRequestResubmissionByCR}
             onViewDetails={setSelectedDetailsSubmission}
@@ -540,25 +545,40 @@ export default function App() {
 
         {currentRole === 'auth' && (
           isSuperAdminRoute ? (
+            // Super Admin: fixed credentials, no Google OAuth
             <SuperAdminAuthPage
               onSelectProfile={(profile) => {
                 handleSelectProfile(profile);
               }}
               onReturnToStandardAuth={() => {
                 setIsSuperAdminRoute(false);
+                setSelectedEntryRole(null);
                 if (window.location.pathname.includes('superadmin')) {
                   window.history.pushState({}, '', '/');
                 }
                 window.location.hash = '';
               }}
             />
+          ) : selectedEntryRole === null ? (
+            // Stage 0: Role Selection Landing
+            <RoleSelectionPage
+              onSelectRole={(role) => setSelectedEntryRole(role)}
+              onGoToSuperAdmin={() => {
+                window.location.hash = '#superadmin';
+                setIsSuperAdminRoute(true);
+              }}
+            />
           ) : (
+            // Stage 1: Auth (Google for Students/TGMs, Manual for CR/Club Head)
             <AuthPage
               activeProfile={activeProfile}
+              allUsers={allUsers}
               onSelectProfile={(profile) => {
                 handleSelectProfile(profile);
               }}
               onReseedDatabase={handleReseedDb}
+              preselectedRole={selectedEntryRole}
+              onBackToRoleSelection={() => setSelectedEntryRole(null)}
             />
           )
         )}
