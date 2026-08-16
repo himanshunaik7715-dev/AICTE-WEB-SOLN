@@ -81,7 +81,7 @@ export async function sendWelcomeEmail(data: {
       </div>
 
       <div style="border-t: 1px solid #f1f5f9; padding-top: 16px; text-align: center; color: #94a3b8; font-size: 11px;">
-        Thakur College of Engineering & Technology (Autonomous Institute Affiliated to University of Mumbai)
+        Thakur College of Engineering & Technology (It is an independent, degree-granting Deemed-to-be University.)
       </div>
     </div>
   `;

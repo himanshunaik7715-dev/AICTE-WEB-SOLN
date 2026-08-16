@@ -25,6 +25,9 @@ export interface UserProfile {
   name: string;
   email: string;
   role: UserRole;
+  studentUid?: string;
+  phoneNumber?: string;
+  course?: string;
   rollNo: string;
   erpNo: string;
   department: string;
@@ -32,7 +35,9 @@ export interface UserProfile {
   academicBatch: string;
   photoUrl?: string;
   tgmName?: string;
+  tgmId?: string;
   crName?: string;
+  crId?: string; // ID of the assigned CR user (from users.id)
   driveRootFolderId?: string;
   tgmApprovalStatus?: 'pending' | 'approved' | 'rejected';
   approvedBy?: string;

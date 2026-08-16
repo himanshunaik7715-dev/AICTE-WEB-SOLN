@@ -103,8 +103,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     new Set([
       ...admins.map((a) => a.name),
       ...submissions.map((s) => s.assignedTgmName).filter(Boolean) as string[],
-      'Prof. S. K. Mehta',
-      'Dr. Rajesh Patel',
     ])
   );
 
@@ -119,7 +117,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       s.activityName.toLowerCase().includes(searchQuery.toLowerCase());
 
     let matchesTgm = true;
-    const subTgm = (s.assignedTgmName || 'Prof. S. K. Mehta').toLowerCase();
+    const subTgm = (s.assignedTgmName || '').toLowerCase();
 
     if (selectedTgmFilter === 'MY_MENTEES') {
       const activeName = studentProfile.name.toLowerCase();
@@ -360,7 +358,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   }
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="w-full max-w-screen-xl mx-auto space-y-6 pt-4 px-4 pb-12 sm:px-6 lg:px-8">
       {/* Admin Header */}
       <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
@@ -533,6 +531,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             ) : (
               filteredQueue.map((sub, idx) => {
                 const cat = AICTE_CATEGORIES.find((c) => c.id === sub.activityCategoryNo);
+                const subStudentProfile = allUsers.find((u) => u.id === sub.studentId);
 
                 return (
                   <div
@@ -554,8 +553,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               <Check className="w-3 h-3" /> Checked by CR ✓
                             </span>
                             <span className="bg-indigo-50 text-indigo-800 text-[11px] px-2 py-0.5 rounded font-bold border border-indigo-200 flex items-center gap-1">
-                              <ShieldCheck className="w-3 h-3 text-indigo-600" />
-                              Assigned TGM: {sub.assignedTgmName || 'Prof. S. K. Mehta'}
+                              <span className="text-xs text-indigo-700 font-semibold truncate max-w-[150px]">
+                              Assigned TGM: {sub.assignedTgmName || 'Not Assigned'}
+                              </span>
                             </span>
                           </div>
                           <p className="text-xs text-slate-500">
@@ -603,7 +603,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                       <div className="flex items-center gap-2">
                         <a
-                          href={getDriveFolderWebUrl(sub.studentFolderId || sub.studentId)}
+                          href={getDriveFolderWebUrl(subStudentProfile?.driveRootFolderId || sub.studentId)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
@@ -921,20 +921,21 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         // 4. Add any missing students from submissions
         submissions.forEach((sub) => {
           if (!studentMap.has(sub.studentId)) {
-            studentMap.set(sub.studentId, {
+            const newSubStudent: UserProfile = {
               id: sub.studentId,
               name: sub.studentName,
-              email: `${sub.studentErpNo || 'student'}@tcetmumbai.in`,
+              email: `${sub.studentErpNo}@tcetmumbai.in`,
               role: 'student',
               rollNo: sub.studentRollNo,
-              erpNo: sub.studentErpNo || sub.studentId,
+              erpNo: sub.studentErpNo,
               department: sub.studentDepartment || 'Internet of Things (IoT)',
               division: sub.studentDivision || 'A',
               academicBatch: '2023-2027',
-              tgmName: sub.assignedTgmName || 'Prof. S. K. Mehta (TGM)',
-              crName: 'Ananya Verma (CR)',
-              driveRootFolderId: `drive_folder_${sub.studentId}`,
-            });
+              tgmName: sub.assignedTgmName,
+              crName: sub.assignedCrName,
+              driveRootFolderId: '',
+            };
+            studentMap.set(sub.studentId, newSubStudent);
           }
         });
 
@@ -1015,9 +1016,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="bg-slate-100 text-slate-700 border border-slate-200 text-xs px-3 py-1.5 rounded-xl font-semibold">
-                  TGM: Prof. S. K. Mehta
-                </span>
                 <span className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-xl font-bold shadow-xs">
                   Batch: 2023–2027
                 </span>
@@ -1260,9 +1258,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           {/* Department */}
                           <td className="py-4 px-4 text-slate-700">
                             <span className="font-semibold text-slate-800 block text-xs">{st.department}</span>
-                            <span className="text-[11px] text-slate-500">
-                              Div {st.division} • Batch {st.academicBatch}
-                            </span>
+                            <div className="text-xs text-slate-500 font-medium">
+                              Div {st.division} | {st.department}
+                            </div>
                           </td>
 
                           {/* Approved Points */}
@@ -1378,9 +1376,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         <p className="text-xs font-bold text-white flex items-center gap-1.5">
                           <span>Student Google Drive Root Folder</span>
                         </p>
-                        <p className="text-[11px] text-emerald-300 font-mono truncate max-w-xs sm:max-w-sm">
-                          {selectedStudentForModal.driveRootFolderId || `drive_folder_${selectedStudentForModal.erpNo}`}
-                        </p>
+                        <span className="text-indigo-400 font-mono text-sm break-all">
+                          {selectedStudentForModal.driveRootFolderId || 'Not Configured'}
+                        </span>
                       </div>
                     </div>
 
@@ -1568,7 +1566,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Prof. S. K. Mehta"
+                  placeholder="e.g. Prof. Name"
                   value={newAdminName}
                   onChange={(e) => setNewAdminName(e.target.value)}
                   className="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-emerald-500/20 focus:outline-none"

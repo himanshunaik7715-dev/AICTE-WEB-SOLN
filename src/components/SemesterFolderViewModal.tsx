@@ -157,13 +157,7 @@ export const SemesterFolderViewModal: React.FC<SemesterFolderViewModalProps> = (
               </div>
             </div>
 
-            <button
-              onClick={() => onOpenDriveFetchModal(semester)}
-              className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer self-start sm:self-auto shrink-0 border border-indigo-400/30"
-            >
-              <FolderDown className="w-4 h-4 text-indigo-200" />
-              <span>Fetch/Re-sync Drive Files</span>
-            </button>
+
           </div>
         </div>
 
@@ -178,7 +172,7 @@ export const SemesterFolderViewModal: React.FC<SemesterFolderViewModalProps> = (
             }`}
           >
             <FolderDown className="w-3.5 h-3.5" />
-            <span>Imported (Not Sent)</span>
+            <span>Imported</span>
             <span
               className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                 activeTab === 'imported' ? 'bg-indigo-800 text-indigo-100' : 'bg-slate-100 text-slate-600'
@@ -197,7 +191,7 @@ export const SemesterFolderViewModal: React.FC<SemesterFolderViewModalProps> = (
             }`}
           >
             <Clock className="w-3.5 h-3.5" />
-            <span>Pending Verification</span>
+            <span>Pending</span>
             <span
               className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                 activeTab === 'pending' ? 'bg-amber-800 text-amber-100' : 'bg-slate-100 text-slate-600'
@@ -335,15 +329,7 @@ export const SemesterFolderViewModal: React.FC<SemesterFolderViewModalProps> = (
                   ? 'No non-PDF files detected in this Google Drive folder.'
                   : 'No certificate submissions found under this status.'}
               </p>
-              {activeTab === 'imported' && (
-                <button
-                  onClick={() => onOpenDriveFetchModal(semester)}
-                  className="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl inline-flex items-center gap-1.5 cursor-pointer"
-                >
-                  <FolderDown className="w-4 h-4" />
-                  Fetch Files from Google Drive
-                </button>
-              )}
+
             </div>
           ) : (
             <div className="space-y-3">

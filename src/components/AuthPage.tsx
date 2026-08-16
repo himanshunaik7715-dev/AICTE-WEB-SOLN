@@ -7,6 +7,7 @@ import {
   loginWithManualCredentials,
   registerClubHeadAccount,
 } from '../services/authService';
+import { StudentProfileSetup } from './StudentProfileSetup';
 import {
   GraduationCap,
   CheckCircle2,
@@ -88,6 +89,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   // Onboarding Data (for Google Users)
   const [onboardingEmail, setOnboardingEmail] = useState('');
   const [onboardingName, setOnboardingName] = useState('');
+  const [existingProfile, setExistingProfile] = useState<UserProfile | undefined>();
   const [role, setRole] = useState<UserRole>(preselectedRole || 'student');
   const [rollNo, setRollNo] = useState('');
   const [erpNo, setErpNo] = useState('');
@@ -117,6 +119,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       } else {
         setOnboardingEmail(result.email);
         setOnboardingName(result.name);
+        setExistingProfile(result.existingProfile);
         if (preselectedRole) setRole(preselectedRole);
         setStep('onboarding');
         setSuccessMsg('Google authentication successful! Please complete your profile to continue.');
@@ -202,6 +205,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     }
   };
 
+  if (step === 'onboarding' && (preselectedRole === 'student' || role === 'student')) {
+    return (
+      <StudentProfileSetup
+        email={onboardingEmail}
+        name={onboardingName}
+        existingProfile={existingProfile}
+        onComplete={(profile) => {
+          onSelectProfile(profile);
+        }}
+        onBack={() => {
+          setStep('login');
+          setExistingProfile(undefined);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-[85vh] flex items-center justify-center p-4">
       <div className="max-w-4xl w-full bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden grid grid-cols-1 md:grid-cols-12">
@@ -223,7 +243,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 Thakur College of Engineering &amp; Technology
               </h2>
               <p className="text-xs text-indigo-200/80 leading-relaxed">
-                Autonomous Institute Affiliated to University of Mumbai
+                It is an independent, degree-granting Deemed-to-be University.
               </p>
             </div>
 
@@ -547,7 +567,23 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           )}
 
           {/* Step 2: Onboarding Form (for Google users) */}
-          {step === 'onboarding' && (
+          {step === 'onboarding' && (preselectedRole === 'student' || role === 'student') && (
+            <StudentProfileSetup
+              email={onboardingEmail}
+              name={onboardingName}
+              existingProfile={existingProfile}
+              onComplete={(profile) => {
+                onSelectProfile(profile);
+                setSuccessMsg(`Profile created successfully for ${profile.name}!`);
+              }}
+              onBack={() => {
+                setStep('login');
+                setExistingProfile(undefined);
+              }}
+            />
+          )}
+
+          {step === 'onboarding' && preselectedRole !== 'student' && role !== 'student' && (
             <form onSubmit={handleOnboardingSubmit} className="space-y-4">
               <div>
                 <h3 className="text-base font-bold text-slate-900">Complete Your Profile</h3>

@@ -31,8 +31,8 @@ export const UploadCertificateModal: React.FC<UploadCertificateModalProps> = ({
   studentRollNo,
   studentDepartment,
   studentDivision,
-  assignedTgmName = 'Prof. S. K. Mehta (TGM)',
-  assignedCrName = 'Ananya Verma (CR)',
+  assignedTgmName,
+  assignedCrName,
 }) => {
   const [semester, setSemester] = useState<Semester>(
     existingSubmission ? existingSubmission.semester : defaultSemester

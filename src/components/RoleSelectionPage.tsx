@@ -1,21 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   GraduationCap,
   BookOpen,
   Award,
   ArrowRight,
-  ShieldCheck,
   Sparkles,
-} from 'lucide-react';
-import { UserRole } from '../types';
+} from "lucide-react";
 
 interface RoleSelectionPageProps {
-  onSelectRole: (role: 'student' | 'cr' | 'admin') => void;
+  onSelectRole: (role: "student" | "cr" | "admin") => void;
   onGoToSuperAdmin: () => void;
 }
 
 interface RoleCard {
-  role: 'student' | 'cr' | 'admin';
+  role: "student" | "cr" | "admin";
   icon: React.ReactNode;
   title: string;
   subtitle: string;
@@ -29,195 +27,205 @@ interface RoleCard {
 
 const roles: RoleCard[] = [
   {
-    role: 'student',
-    icon: <GraduationCap className="w-8 h-8" />,
-    title: 'Student',
-    subtitle: 'Manage your AICTE activities',
+    role: "student",
+    icon: <GraduationCap className="w-7 h-7 sm:w-8 sm:h-8" />,
+    title: "Student",
+    subtitle: "Manage your AICTE activities",
     description:
-      'Upload certificates, track activity points across semesters, and monitor your submission status in real time.',
-    gradient: 'from-indigo-600 to-violet-600',
-    iconBg: 'bg-indigo-500/20 text-indigo-300',
-    border: 'border-indigo-500/30 hover:border-indigo-400/60',
-    tag: 'Open Access',
-    tagColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+      "Upload certificates, track activity points across semesters, and monitor your submission status in real time.",
+    gradient: "from-indigo-500 to-violet-500",
+    iconBg: "bg-indigo-500/15 text-indigo-300",
+    border: "border-indigo-500/30 hover:border-indigo-400/70",
+    tag: "Open Access",
+    tagColor: "bg-indigo-500/15 text-indigo-300 border-indigo-500/30",
   },
   {
-    role: 'admin',
-    icon: <BookOpen className="w-8 h-8" />,
-    title: 'Teacher / Mentor',
-    subtitle: 'TGM — Teacher Guardian Mentor',
+    role: "cr",
+    icon: <Award className="w-7 h-7 sm:w-8 sm:h-8" />,
+    title: "CR / Club Head",
+    subtitle: "Class Representative or Club Leader",
     description:
-      'Review and approve student submissions at Stage-2. Manage your assigned class or division with full oversight.',
-    gradient: 'from-emerald-600 to-teal-600',
-    iconBg: 'bg-emerald-500/20 text-emerald-300',
-    border: 'border-emerald-500/30 hover:border-emerald-400/60',
-    tag: 'Requires Approval',
-    tagColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+    "Stage-1 review of student certificates for your class or club. NSS Heads, Cultural Secretaries, and other Club Heads also sign in here.",
+    gradient: "from-rose-500 to-pink-500",
+    iconBg: "bg-rose-500/15 text-rose-300",
+    border: "border-rose-500/30 hover:border-rose-400/70",
+    tag: "Requires Approval",
+    tagColor: "bg-amber-500/15 text-amber-300 border-amber-500/30",
   },
   {
-    role: 'cr',
-    icon: <Award className="w-8 h-8" />,
-    title: 'CR / Club Head',
-    subtitle: 'Class Representative or Club Leader',
+    role: "admin",
+    icon: <BookOpen className="w-7 h-7 sm:w-8 sm:h-8" />,
+    title: "Teacher / Mentor",
+    subtitle: "TGM — Teacher Guardian Mentor",
     description:
-      'Stage-1 review of student certificates for your class or club. NSS Heads, Cultural Secretaries, and other Club Heads also sign in here.',
-    gradient: 'from-rose-600 to-pink-600',
-    iconBg: 'bg-rose-500/20 text-rose-300',
-    border: 'border-rose-500/30 hover:border-rose-400/60',
-    tag: 'Requires Approval',
-    tagColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+      "Review and approve student submissions at Stage-2. Manage your assigned class or division with full oversight.",
+    gradient: "from-emerald-500 to-teal-500",
+    iconBg: "bg-emerald-500/15 text-emerald-300",
+    border: "border-emerald-500/30 hover:border-emerald-400/70",
+    tag: "Requires Approval",
+    tagColor: "bg-amber-500/15 text-amber-300 border-amber-500/30",
   },
 ];
 
 export const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({
   onSelectRole,
-  onGoToSuperAdmin,
 }) => {
   const [hoveredRole, setHoveredRole] = useState<string | null>(null);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col relative overflow-hidden">
-      {/* Ambient background blobs */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[500px] bg-violet-600/10 rounded-full blur-[120px]" />
-        <div className="absolute top-[40%] left-[50%] -translate-x-1/2 w-[600px] h-[300px] bg-rose-600/5 rounded-full blur-[100px]" />
+    <div className="relative min-h-screen w-full overflow-x-hidden bg-slate-950 text-white">
+      {/* Background effects */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-32 -top-32 h-[420px] w-[420px] rounded-full bg-indigo-600/10 blur-[120px]" />
+
+        <div className="absolute -bottom-32 -right-32 h-[420px] w-[420px] rounded-full bg-violet-600/10 blur-[120px]" />
+
+        <div className="absolute left-1/2 top-1/2 h-[280px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-fuchsia-600/[0.04] blur-[120px]" />
+
+        <div
+          className="absolute inset-0 opacity-[0.025]"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.7) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.7) 1px, transparent 1px)",
+            backgroundSize: "40px 40px",
+          }}
+        />
       </div>
 
-      {/* Subtle grid overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-[0.03]"
-        style={{
-          backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-        }}
-      />
+      {/* Content */}
+      <div className="relative z-10 flex min-h-screen flex-col">
+        {/* Header */}
+        <header className="flex shrink-0 items-center px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/25 sm:h-10 sm:w-10">
+              <Sparkles className="h-5 w-5 text-white sm:h-5 sm:w-5" />
+            </div>
 
-      {/* Header */}
-      <header className="relative z-10 flex items-center justify-between px-6 py-5 max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-indigo-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-            <Sparkles className="w-5 h-5 text-white" />
+            <div>
+              <p className="text-xs font-bold leading-none text-slate-200 sm:text-sm">
+                TCET
+              </p>
+
+              <p className="mt-0.5 text-[9px] leading-none text-slate-500 sm:text-[10px]">
+                AICTE Activity Portal
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-300 leading-none">TCET</p>
-            <p className="text-[10px] text-slate-500 leading-none mt-0.5">AICTE Activity Portal</p>
+        </header>
+
+        {/* Main Landing Content */}
+        <main className="flex flex-1 flex-col items-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-6">
+          {/* College Badge */}
+          <div className="mb-3 flex max-w-full items-center gap-2 rounded-full border border-indigo-500/25 bg-indigo-500/10 px-3 py-1.5 sm:mb-4 sm:px-4">
+            <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-indigo-400" />
+
+            <span className="truncate text-[9px] font-semibold uppercase tracking-wider text-indigo-300 sm:text-[11px]">
+              Thakur College of Engineering &amp; Technology (Autonomous)
+            </span>
           </div>
-        </div>
 
-        {/* Super Admin link */}
-        <button
-          onClick={onGoToSuperAdmin}
-          className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-indigo-400 transition-colors duration-200 cursor-pointer"
-        >
-          <ShieldCheck className="w-3.5 h-3.5" />
-          Super Admin
-        </button>
-      </header>
+          {/* Heading */}
+          <h1 className="mb-2 px-4 sm:px-8 lg:px-0 text-center text-3xl font-black leading-tight tracking-tight sm:text-4xl lg:text-5xl">
+            <span className="text-white">Who are </span>
 
-      {/* Main Content */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-12">
-        {/* Badge */}
-        <div className="flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-4 py-1.5 mb-6">
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-          <span className="text-[11px] font-semibold text-indigo-300 tracking-wider uppercase">
-            Thakur College of Engineering &amp; Technology (Autonomous)
-          </span>
-        </div>
+            <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-rose-400 bg-clip-text pr-1 text-transparent">
+              you?
+            </span>
+          </h1>
 
-        {/* Headline */}
-        <h1 className="text-4xl sm:text-5xl font-black text-center tracking-tight mb-3 leading-tight">
-          <span className="text-white">Who are</span>{' '}
-          <span className="bg-gradient-to-r from-indigo-400 via-violet-400 to-rose-400 bg-clip-text text-transparent">
-            you?
-          </span>
-        </h1>
-        <p className="text-slate-400 text-sm text-center max-w-md mb-12 leading-relaxed">
-          Select your role to continue to the right portal. Only{' '}
-          <strong className="text-slate-300">@tcetmumbai.in</strong> accounts are
-          permitted.
-        </p>
+          <p className="mb-5 max-w-md text-center text-xs leading-relaxed text-slate-400 sm:mb-7 sm:text-sm">
+            Select your role to continue to the right portal. Only{" "}
+            <strong className="text-slate-200">@tcetmumbai.in</strong> accounts
+            are permitted.
+          </p>
 
-        {/* Role Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 w-full max-w-4xl">
-          {roles.map((card) => (
-            <button
-              key={card.role}
-              id={`role-card-${card.role}`}
-              onClick={() => onSelectRole(card.role)}
-              onMouseEnter={() => setHoveredRole(card.role)}
-              onMouseLeave={() => setHoveredRole(null)}
-              className={`group relative flex flex-col text-left bg-slate-900/80 backdrop-blur-sm border rounded-2xl p-6 transition-all duration-300 cursor-pointer overflow-hidden ${card.border} ${
-                hoveredRole === card.role
-                  ? 'shadow-2xl -translate-y-1 scale-[1.02]'
-                  : 'shadow-lg'
-              }`}
-              style={{
-                boxShadow:
+          {/* Role Cards */}
+          <div className="grid w-full max-w-5xl grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+            {roles.map((card) => (
+              <button
+                key={card.role}
+                id={`role-card-${card.role}`}
+                type="button"
+                onClick={() => onSelectRole(card.role)}
+                onMouseEnter={() => setHoveredRole(card.role)}
+                onMouseLeave={() => setHoveredRole(null)}
+                className={`group relative flex min-h-[220px] flex-col overflow-hidden rounded-2xl border bg-slate-900/75 p-4 text-left backdrop-blur-md transition-all duration-300 sm:min-h-[250px] sm:p-5 ${
+                  card.border
+                } ${
                   hoveredRole === card.role
-                    ? `0 20px 60px -10px rgba(0,0,0,0.5)`
-                    : undefined,
-              }}
-            >
-              {/* Gradient shimmer on hover */}
-              <div
-                className={`absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none`}
-              />
-
-              {/* Top row: icon + tag */}
-              <div className="flex items-start justify-between mb-5">
-                <div
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center ${card.iconBg} border border-white/5 transition-transform duration-300 group-hover:scale-110`}
-                >
-                  {card.icon}
-                </div>
-                <span
-                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${card.tagColor}`}
-                >
-                  {card.tag}
-                </span>
-              </div>
-
-              {/* Title & subtitle */}
-              <h2 className="text-lg font-black text-white mb-0.5">{card.title}</h2>
-              <p className="text-[11px] font-semibold text-slate-400 mb-3">{card.subtitle}</p>
-
-              {/* Description */}
-              <p className="text-xs text-slate-500 leading-relaxed flex-1">{card.description}</p>
-
-              {/* CTA row */}
-              <div
-                className={`flex items-center gap-1.5 mt-5 text-xs font-bold bg-gradient-to-r ${card.gradient} bg-clip-text text-transparent`}
+                    ? "-translate-y-1 shadow-2xl"
+                    : "shadow-lg"
+                }`}
               >
-                Continue
-                <ArrowRight
-                  className={`w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-1 ${
-                    card.role === 'student'
-                      ? 'text-indigo-400'
-                      : card.role === 'admin'
-                      ? 'text-emerald-400'
-                      : 'text-rose-400'
-                  }`}
+                {/* Hover gradient */}
+                <div
+                  className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${card.gradient} opacity-0 transition-opacity duration-300 group-hover:opacity-[0.06]`}
                 />
-              </div>
-            </button>
-          ))}
-        </div>
 
-        {/* Info note */}
-        <p className="mt-8 text-[11px] text-slate-600 text-center max-w-sm">
-          Teacher / Mentor (TGM) and CR / Club Head roles require approval by the Super
-          Admin before dashboard access is granted.
-        </p>
-      </main>
+                {/* Decorative glow */}
+                <div
+                  className={`pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-gradient-to-br ${card.gradient} opacity-0 blur-3xl transition-opacity duration-300 group-hover:opacity-30`}
+                />
 
-      {/* Footer */}
-      <footer className="relative z-10 text-center pb-6 px-4">
-        <p className="text-[11px] text-slate-700">
-          © 2026 Thakur College of Engineering &amp; Technology (Autonomous). All Rights Reserved.
-        </p>
-      </footer>
+                {/* Card top */}
+                <div className="relative z-10 mb-4 flex items-start justify-between">
+                  <div
+                    className={`flex h-11 w-11 items-center justify-center rounded-xl border border-white/5 ${card.iconBg} transition-transform duration-300 group-hover:scale-110 sm:h-12 sm:w-12`}
+                  >
+                    {card.icon}
+                  </div>
+
+                  <span
+                    className={`rounded-full border px-2.5 py-1 text-[9px] font-bold sm:text-[10px] ${card.tagColor}`}
+                  >
+                    {card.tag}
+                  </span>
+                </div>
+
+                {/* Card title */}
+                <div className="relative z-10">
+                  <h2 className="text-base font-black text-white sm:text-lg">
+                    {card.title}
+                  </h2>
+
+                  <p
+                    className={`mt-0.5 bg-gradient-to-r ${card.gradient} bg-clip-text text-[10px] font-semibold text-transparent sm:text-[11px]`}
+                  >
+                    {card.subtitle}
+                  </p>
+                </div>
+
+                {/* Divider */}
+                <div
+                  className={`relative z-10 my-3 h-px w-full bg-gradient-to-r ${card.gradient} opacity-20`}
+                />
+
+                {/* Description */}
+                <p className="relative z-10 flex-1 text-[11px] leading-relaxed text-slate-400 sm:text-xs">
+                  {card.description}
+                </p>
+
+                {/* Continue */}
+                <div
+                  className={`relative z-10 mt-4 flex items-center justify-between rounded-lg bg-gradient-to-r ${card.gradient} px-3 py-2 text-[11px] font-bold text-white shadow-lg transition-all duration-300 group-hover:brightness-110 sm:text-xs`}
+                >
+                  <span>Continue</span>
+
+                  <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-1" />
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Approval Note */}
+          <div className="max-w-sm rounded-xl border border-indigo-500/20 bg-slate-900/50 px-4 py-2.5 text-center backdrop-blur-sm sm:mt-6 sm:px-6">
+            <p className="text-[9px] leading-relaxed text-slate-500 sm:text-[10px] sm:leading-relaxed sm:tracking-wide">
+              Teacher / Mentor (TGM) and CR / Club Head roles require approval
+              by the Super Admin before dashboard access is granted.
+            </p>
+          </div>
+        </main>
+      </div>
     </div>
   );
 };

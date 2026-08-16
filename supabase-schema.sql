@@ -54,6 +54,10 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "approvedBy" TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "approvedAt" TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "customRole" TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "studentUid" TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "phoneNumber" TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "crId" TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "tgmId" TEXT;
 
 
 -- 2. Create or Update Whitelisted / Pending Admins Table
@@ -126,13 +130,13 @@ CREATE TABLE IF NOT EXISTS public.submissions (
   file_name TEXT,
   "fileDriveIdHistory" JSONB DEFAULT '[]'::jsonb,
   file_drive_id_history JSONB DEFAULT '[]'::jsonb,
-  "isCheckedByCr" BOOLEAN DEFAULT FALSE,
+  "isCheckedByCR" BOOLEAN DEFAULT FALSE,
   is_checked_by_cr BOOLEAN DEFAULT FALSE,
   "crCheckedAt" TEXT,
   cr_checked_at TIMESTAMPTZ,
   "crCheckedBy" TEXT,
   cr_checked_by TEXT,
-  "isVerifiedByTgm" BOOLEAN DEFAULT FALSE,
+  "isVerifiedByTGM" BOOLEAN DEFAULT FALSE,
   is_verified_by_tgm BOOLEAN DEFAULT FALSE,
   "tgmVerifiedAt" TEXT,
   tgm_verified_at TIMESTAMPTZ,

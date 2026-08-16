@@ -52,11 +52,12 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
   onImportSubmissions,
 }) => {
   const [folderLink, setFolderLink] = useState(
-    student.driveRootFolderId || `https://drive.google.com/drive/folders/tcet_portfolio_${student.erpNo || student.rollNo}`
+    student.driveRootFolderId || ''
   );
   const [targetSemester, setTargetSemester] = useState<Semester>(defaultSemester);
   const [isFetching, setIsFetching] = useState(false);
-  const [isAiProcessing, setIsAiProcessing] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+
   const [fetchedItems, setFetchedItems] = useState<FetchedFileItem[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -91,7 +92,7 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
           const hours = 24;
           const points = Math.floor(hours / catObj.minHoursPerPoint);
 
-          const autoSem: Semester = (parsed.semesterCode as Semester) || (file.semester as Semester) || 'SEM_1';
+          const autoSem: Semester = (parsed as any).semesterCode || file.semester || targetSemester;
 
           return {
             id: `FETCH-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -141,119 +142,74 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
     );
   };
 
-  const handleRunAiFallbackOnUnmatched = async () => {
-    const unmatched = fetchedItems.filter((i) => !i.hasNamingConvention);
-    if (unmatched.length === 0) {
-      alert('All fetched files already follow the naming convention!');
-      return;
-    }
-
-    setIsAiProcessing(true);
-    try {
-      const updatedList = [...fetchedItems];
-      for (let idx = 0; idx < updatedList.length; idx++) {
-        const item = updatedList[idx];
-        if (!item.hasNamingConvention) {
-          try {
-            const res = await fetch('/api/gemini/classify-certificate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                fileName: item.name,
-                fileText: `Certificate document name: ${item.name}.`,
-              }),
-            });
-            const json = await res.json();
-            if (json.success && json.data && json.data.category !== 'unrecognized') {
-              const aiCatCode = json.data.category;
-              let aiCatNum = parseInt(aiCatCode.replace('CAT-', ''), 10);
-              if (isNaN(aiCatNum) || aiCatNum < 1 || aiCatNum > 15) aiCatNum = 6;
-
-              const catObj = AICTE_CATEGORIES.find((c) => c.id === aiCatNum) || AICTE_CATEGORIES[0];
-              const hours = 24;
-              const points = Math.max(1, Math.round(hours / catObj.minHoursPerPoint));
-
-              updatedList[idx] = {
-                ...item,
-                categoryNo: aiCatNum,
-                categoryCode: aiCatCode,
-                title: json.data.title || item.title,
-                hoursSpent: hours,
-                calculatedPoints: points,
-                aiClassified: true,
-              };
-            }
-          } catch (e) {
-            console.warn('Gemini auto-classification notice for file:', item.name, e);
-          }
-        }
-      }
-      setFetchedItems(updatedList);
-      setSuccessMsg('Gemini AI classification completed for non-standard file names!');
-    } finally {
-      setIsAiProcessing(false);
-    }
-  };
-
-  const handleImportSelected = () => {
+  const handleImportSelected = async () => {
     const selectedFiles = fetchedItems.filter((i) => i.selected);
     if (selectedFiles.length === 0) {
       alert('Please select at least one certificate file to import.');
       return;
     }
 
-    const newSubmissions: CertificateSubmission[] = selectedFiles.map((file) => {
-      const category = AICTE_CATEGORIES.find((c) => c.id === file.categoryNo) || AICTE_CATEGORIES[0];
+    setIsImporting(true);
+    setErrorMsg(null);
 
-      const defaultStatus: SubmissionStatus = file.hasNamingConvention
-        ? 'imported'
-        : file.aiClassified
-        ? 'imported'
-        : file.mimeType !== 'application/pdf'
-        ? 'skipped_not_pdf'
-        : 'naming_error';
+    try {
+      const newSubmissions: CertificateSubmission[] = selectedFiles.map((file) => {
+        const category = AICTE_CATEGORIES.find((c) => c.id === file.categoryNo) || AICTE_CATEGORIES[0];
 
-      return {
-        id: `SUB-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5)}`,
-        studentId: student.id || `STU-${student.erpNo || student.rollNo}`,
-        studentName: student.name,
-        studentRollNo: student.rollNo,
-        studentErpNo: student.erpNo,
-        studentDepartment: student.department,
-        studentDivision: student.division,
-        assignedTgmName: student.tgmName || 'Prof. S. K. Mehta (TGM)',
-        assignedCrName: student.crName || 'Ananya Verma (CR)',
-        semester: file.semester || 'SEM_1',
-        activityName: file.title,
-        conductedBy: 'Google Drive Public Sync',
-        activityCategoryNo: file.categoryNo,
-        shortDescription: file.hasNamingConvention
-          ? `Auto-synced from public Drive folder under category ${file.categoryCode} (${category.title}).`
+        const defaultStatus: SubmissionStatus = file.hasNamingConvention
+          ? 'imported'
           : file.aiClassified
-          ? `Auto-classified by Gemini AI under category ${file.categoryCode} (${category.title}).`
-          : `Synced from public Drive folder (${file.name}).`,
-        hoursSpent: file.hoursSpent,
-        calculatedPoints: file.calculatedPoints,
-        currentFileDriveId: file.driveFileId,
-        fileName: file.name,
-        fileDriveIdHistory: [file.driveFileId],
-        isCheckedByCR: false,
-        isVerifiedByTGM: false,
-        status: defaultStatus,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-    });
+          ? 'imported'
+          : file.mimeType !== 'application/pdf'
+          ? 'skipped_not_pdf'
+          : 'naming_error';
 
-    onImportSubmissions(newSubmissions);
+        return {
+          id: `SUB-${Date.now().toString().slice(-6)}-${Math.random().toString(36).substring(2, 5)}`,
+          studentId: student.id || `STU-${student.erpNo || student.rollNo}`,
+          studentName: student.name,
+          studentRollNo: student.rollNo,
+          studentErpNo: student.erpNo,
+          studentDepartment: student.department,
+          studentDivision: student.division,
+          assignedTgmName: student.tgmName,
+          assignedCrName: student.crName,
+          semester: file.semester || targetSemester,
+          activityName: file.title,
+          conductedBy: 'Google Drive Public Sync',
+          activityCategoryNo: file.categoryNo,
+          shortDescription: file.hasNamingConvention
+            ? `Auto-synced from public Drive folder under category ${file.categoryCode} (${category.title}).`
+            : file.aiClassified
+            ? `Auto-classified by Gemini AI under category ${file.categoryCode} (${category.title}).`
+            : `Synced from public Drive folder (${file.name}).`,
+          hoursSpent: file.hoursSpent,
+          calculatedPoints: file.calculatedPoints,
+          currentFileDriveId: file.driveFileId,
+          fileName: file.name,
+          fileDriveIdHistory: [file.driveFileId],
+          isCheckedByCR: false,
+          isVerifiedByTGM: false,
+          status: defaultStatus,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      });
 
-    confetti({
-      particleCount: 70,
-      spread: 60,
-      origin: { y: 0.6 },
-    });
+      await onImportSubmissions(newSubmissions);
 
-    onClose();
+      confetti({
+        particleCount: 70,
+        spread: 60,
+        origin: { y: 0.6 },
+      });
+
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'Error importing submissions.');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const toggleSelectItem = (id: string) => {
@@ -270,10 +226,10 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
   const activeSemObj = SEMESTER_TARGETS.find((s) => s.semester === targetSemester) || SEMESTER_TARGETS[0];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
-      <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8">
+    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-fadeIn">
+      <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 relative">
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 relative shrink-0">
           <button
             onClick={onClose}
             className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
@@ -300,7 +256,7 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+        <div className="p-6 sm:p-8 space-y-8 overflow-y-auto flex-1">
           {/* Inputs Section */}
           <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
             {/* Drive Folder Link */}
@@ -354,25 +310,7 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
               )}
             </button>
 
-            {fetchedItems.length > 0 && (
-              <button
-                onClick={handleRunAiFallbackOnUnmatched}
-                disabled={isAiProcessing}
-                className="w-full sm:w-auto bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-indigo-300 border border-indigo-700 text-xs font-bold px-4 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                {isAiProcessing ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Running Gemini AI Categorization...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                    Run Gemini AI on Non-Standard File Names
-                  </>
-                )}
-              </button>
-            )}
+
           </div>
 
           {/* Alerts */}
@@ -411,7 +349,7 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
                 </button>
               </div>
 
-              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              <div className="space-y-2">
                 {fetchedItems.map((item) => {
                   const category = AICTE_CATEGORIES.find((c) => c.id === item.categoryNo) || AICTE_CATEGORIES[0];
 
@@ -512,7 +450,7 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="bg-slate-50 p-4 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="bg-slate-50 p-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
           <span className="text-xs text-slate-600 font-medium flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
             Files will be automatically placed into their target Semesters (SEM 1 – SEM 8) as Pending CR Submissions.
@@ -529,10 +467,15 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
             {fetchedItems.length > 0 && (
               <button
                 onClick={handleImportSelected}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+                disabled={isImporting}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer"
               >
-                <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                Auto-Import {fetchedItems.filter((i) => i.selected).length} Certificates
+                {isImporting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                )}
+                {isImporting ? 'Importing...' : `Auto-Import ${fetchedItems.filter((i) => i.selected).length} Certificates`}
               </button>
             )}
           </div>

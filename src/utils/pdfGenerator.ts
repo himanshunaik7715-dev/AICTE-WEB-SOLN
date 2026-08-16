@@ -61,7 +61,7 @@ export function generateActivityDiaryPDF(
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(71, 85, 105);
-  doc.text('(An Autonomous Institute Affiliated to University of Mumbai)', pageWidth / 2, 42, { align: 'center' });
+  doc.text('(An It is an independent, degree-granting Deemed-to-be University.)', pageWidth / 2, 42, { align: 'center' });
   doc.text('A-Block, Thakur Educational Campus, Kandivali (E), Mumbai - 400101', pageWidth / 2, 47, { align: 'center' });
 
   // Banner
@@ -96,7 +96,7 @@ export function generateActivityDiaryPDF(
     ['Division & Batch:', `Div ${student.division} | Batch ${student.academicBatch}`],
     ['Email Address:', student.email],
     ['Teacher Guardian Mentor (TGM):', student.tgmName || 'Prof. S. K. Mehta'],
-    ['Class Representative (CR):', student.crName || 'Ananya Verma'],
+    ['Class Representative (CR):', student.crName || 'Not Assigned'],
     ['Google Drive Root ID:', student.driveRootFolderId || 'drive_root_tcet_2023'],
   ];
 

@@ -79,21 +79,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   // CR Selector Modal state
   const [isCrModalOpen, setIsCrModalOpen] = useState(false);
   const [selectedCr, setSelectedCr] = useState<string>(
-    student.crName || `Ananya Verma (CR - Div ${student.division || 'A'})`
+    student.crId || ''
   );
   const [crSaveSuccess, setCrSaveSuccess] = useState(false);
 
   // TGM Selector Modal state
   const [isTgmModalOpen, setIsTgmModalOpen] = useState(false);
   const [selectedTgm, setSelectedTgm] = useState<string>(
-    student.tgmName || 'Prof. S. K. Mehta (Senior TGM)'
+    student.tgmId || ''
   );
   const [tgmSaveSuccess, setTgmSaveSuccess] = useState(false);
 
   // Google Drive Root Folder Modal state
   const [isDriveFolderModalOpen, setIsDriveFolderModalOpen] = useState(false);
   const [driveFolderInput, setDriveFolderInput] = useState(
-    student.driveRootFolderId || `https://drive.google.com/drive/folders/tcet_portfolio_${student.erpNo || student.rollNo}`
+    student.driveRootFolderId || ''
   );
   const [driveFolderSaveSuccess, setDriveFolderSaveSuccess] = useState(false);
 
@@ -120,31 +120,24 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }, 800);
   };
 
-  // Available CRs list
-  const defaultCrList = [
-    `Ananya Verma (Class Representative - Div ${student.division || 'A'})`,
-    `Rohan Sharma (CR - Div ${student.division || 'A'})`,
-    'Priya Singh (CR - Div B)',
-    'Aditya Patel (CR - Div C)',
-  ];
+  // Available CRs list based on student division
+  const studentDivision = student.division || 'A';
+  const crUsersFromDb = (allUsers || []).filter((u) => u.role === 'cr' && u.division === studentDivision);
 
-  const crUsersFromDb = (allUsers || []).filter((u) => u.role === 'cr');
-
-  const availableCrs = Array.from(
-    new Set([
-      ...crUsersFromDb.map((u) => `${u.name} (CR - Div ${u.division || student.division || 'A'})`),
-      ...defaultCrList,
-    ])
-  );
+  const availableCrs = crUsersFromDb.length > 0 
+    ? crUsersFromDb.map((u) => ({ id: u.id, name: `${u.name} (CR - Div ${u.division})` }))
+    : [{ id: '', name: `No CR found for Division ${studentDivision}` }];
 
   const handleSaveCr = async () => {
-    const finalCrName = selectedCr;
-    if (!finalCrName) return;
+    if (!selectedCr) return;
+    const selectedCrObj = availableCrs.find(c => c.id === selectedCr);
+    if (!selectedCrObj) return;
 
     if (onUpdateProfile) {
       await onUpdateProfile({
         ...student,
-        crName: finalCrName,
+        crId: selectedCrObj.id,
+        crName: selectedCrObj.name,
       });
     }
     setCrSaveSuccess(true);
@@ -155,29 +148,22 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   };
 
   // Available TGMs list
-  const defaultTgmList = [
-    'Prof. S. K. Mehta (Senior TGM)',
-    'Dr. Rajesh Patel (AICTE Co-ordinator)',
-    'Rahul Sharma (Teacher Guardian Mentor)',
-    'Prof. Archana Salve (TGM)',
-    'Prof. Nilesh Rana (TGM)',
-  ];
+  const tgmUsersFromDb = (allUsers || []).filter((u) => u.role === 'admin' && u.tgmApprovalStatus === 'approved' && (u.division === studentDivision || u.division === 'All IoT Divisions'));
 
-  const availableTgms = Array.from(
-    new Set([
-      ...admins.map((a) => `${a.name} (${a.designation})`),
-      ...defaultTgmList,
-    ])
-  );
+  const availableTgms = tgmUsersFromDb.length > 0 
+    ? tgmUsersFromDb.map((u) => ({ id: u.id, name: `${u.name} (TGM)` }))
+    : [{ id: '', name: `No TGM found for Division ${studentDivision}` }];
 
   const handleSaveTgm = async () => {
-    const finalTgmName = selectedTgm;
-    if (!finalTgmName) return;
+    if (!selectedTgm) return;
+    const selectedTgmObj = availableTgms.find(t => t.id === selectedTgm);
+    if (!selectedTgmObj) return;
 
     if (onUpdateProfile) {
       await onUpdateProfile({
         ...student,
-        tgmName: finalTgmName,
+        tgmId: selectedTgmObj.id,
+        tgmName: selectedTgmObj.name,
       });
     }
     setTgmSaveSuccess(true);
@@ -245,7 +231,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="w-full max-w-screen-xl mx-auto space-y-6 pt-4 px-4 pb-12 sm:px-6 lg:px-8">
       {/* Hero Overview Card - Clean Minimalism Style */}
       <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200 relative overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
@@ -309,10 +295,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </div>
               <h3 className="text-base sm:text-lg font-bold text-white mt-1 flex flex-wrap items-center gap-2">
                 <span className="text-slate-300 font-medium">Assigned CR:</span>
-                <span className="text-amber-300 font-extrabold">{student.crName || `Ananya Verma (CR - Div ${student.division || 'A'})`}</span>
+                <span className="text-amber-300 font-extrabold">{student.crName || 'Not Assigned'}</span>
               </h3>
               <p className="text-xs text-amber-200/80 mt-0.5">
-                Submissions go to <strong className="text-white">{student.crName || 'Ananya Verma'}</strong> for Stage-1 verification.
+                Submissions go to <strong className="text-white">{student.crName || 'your CR'}</strong> for Stage-1 verification.
               </p>
             </div>
           </div>
@@ -320,7 +306,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           <button
             id="btn-change-cr"
             onClick={() => {
-              setSelectedCr(student.crName || availableCrs[0]);
+              setSelectedCr(student.crId || availableCrs[0]?.id || '');
               setIsCrModalOpen(true);
             }}
             className="bg-amber-600/90 hover:bg-amber-600 text-white border border-amber-400/40 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-xs"
@@ -347,10 +333,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </div>
               <h3 className="text-base sm:text-lg font-bold text-white mt-1 flex flex-wrap items-center gap-2">
                 <span className="text-slate-300 font-medium">Assigned TGM:</span>
-                <span className="text-amber-300 font-extrabold">{student.tgmName || 'Prof. S. K. Mehta (Senior TGM)'}</span>
+                <span className="text-amber-300 font-extrabold">{student.tgmName || 'Not Assigned'}</span>
               </h3>
               <p className="text-xs text-indigo-200/80 mt-0.5">
-                Submissions go to <strong className="text-white">{student.tgmName || 'Prof. S. K. Mehta'}</strong> for Stage-2 verification.
+                Submissions go to <strong className="text-white">{student.tgmName || 'your TGM'}</strong> for Stage-2 verification.
               </p>
             </div>
           </div>
@@ -358,7 +344,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           <button
             id="btn-change-tgm"
             onClick={() => {
-              setSelectedTgm(student.tgmName || availableTgms[0]);
+              setSelectedTgm(student.tgmId || availableTgms[0]?.id || '');
               setIsTgmModalOpen(true);
             }}
             className="bg-indigo-600/90 hover:bg-indigo-600 text-white border border-indigo-400/40 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-xs"
@@ -387,27 +373,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <h3 className="text-base sm:text-lg font-bold text-white flex flex-wrap items-center gap-2">
               <span className="text-slate-300 font-medium">Google Drive Root Folder:</span>
               <span className="text-emerald-300 font-mono text-xs sm:text-sm truncate max-w-xs sm:max-w-md bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
-                {student.driveRootFolderId || `drive_folder_${student.erpNo || student.rollNo}`}
+                {student.driveRootFolderId || 'Not Configured'}
               </span>
             </h3>
             <p className="text-xs text-slate-400">
-              Paste the link to your personal Google Drive folder where you store all activity certificates. Your assigned TGM <strong className="text-white">({student.tgmName || 'Prof. S. K. Mehta'})</strong> can open and verify this repository directly.
+              Paste the link to your personal Google Drive folder where you store all activity certificates. Your assigned TGM <strong className="text-white">({student.tgmName || 'TGM'})</strong> can open and verify this repository directly.
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            id="btn-fetch-drive-files-banner"
-            onClick={() => {
-              setDriveFetchModalSem(selectedSemFilter !== 'ALL' ? selectedSemFilter : 'SEM_1');
-              setIsDriveFetchModalOpen(true);
-            }}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-400/40 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-          >
-            <FolderDown className="w-4 h-4 text-indigo-200" />
-            <span>Fetch Files</span>
-          </button>
+
 
           <a
             href={getDriveFolderWebUrl(student.driveRootFolderId)}
@@ -453,14 +429,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <span>Fetch Files</span>
           </button>
 
-          <button
-            id="btn-open-upload-modal"
-            onClick={() => onOpenUploadModal()}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold shadow-xs transition-colors"
-          >
-            <Upload className="w-4 h-4" />
-            Upload New Certificate
-          </button>
+
 
           <button
             id="btn-export-pdf"
@@ -586,16 +555,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   >
                     <FolderDown className="w-3 h-3 text-indigo-500" />
                     Fetch
-                  </button>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenUploadModal(target.semester);
-                    }}
-                    className="text-slate-700 hover:text-indigo-600 font-semibold text-[11px] hover:underline flex items-center gap-0.5"
-                  >
-                    + Add
                   </button>
                 </div>
               </div>
@@ -787,9 +746,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         ) : (
                           <span
                             className="text-slate-500 text-[11px] font-medium bg-slate-100 px-2 py-0.5 rounded-md"
-                            title={`Assigned to TGM: ${sub.assignedTgmName || student.tgmName || 'Prof. S. K. Mehta'}`}
+                            title={`Assigned to TGM: ${sub.assignedTgmName || student.tgmName || 'TGM'}`}
                           >
-                            Awaiting {(sub.assignedTgmName || student.tgmName || 'TGM').split(' ')[0]}
+                            Awaiting {sub.assignedTgmName || student.tgmName || 'TGM'}
                           </span>
                         )}
                       </td>
@@ -877,8 +836,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 focus:outline-none shadow-2xs cursor-pointer"
                 >
                   {availableCrs.map((cr) => (
-                    <option key={`cr-opt-${cr}`} value={cr}>
-                      {cr}
+                    <option key={`cr-opt-${cr.id}`} value={cr.id}>
+                      {cr.name}
                     </option>
                   ))}
                 </select>
@@ -952,8 +911,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:outline-none shadow-2xs cursor-pointer"
                 >
                   {availableTgms.map((tgm) => (
-                    <option key={`tgm-opt-${tgm}`} value={tgm}>
-                      {tgm}
+                    <option key={`tgm-opt-${tgm.id}`} value={tgm.id}>
+                      {tgm.name}
                     </option>
                   ))}
                 </select>
@@ -1017,7 +976,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
             <div className="space-y-3">
               <div className="bg-indigo-50 border border-indigo-200 p-3 rounded-xl text-xs text-indigo-900 leading-relaxed">
-                <strong>Why is this required?</strong> Your assigned TGM <strong className="text-indigo-950">({student.tgmName || 'Prof. S. K. Mehta'})</strong> needs a single direct link to your master Google Drive folder where you store all original activity certificates, completion letters, and grade cards.
+                <strong>Why is this required?</strong> Your assigned TGM <strong className="text-indigo-950">({student.tgmName || 'your TGM'})</strong> needs a single direct link to your master Google Drive folder where you store all original activity certificates, completion letters, and grade cards.
               </div>
 
               <div>

@@ -61,7 +61,7 @@ export const CRReviewPortal: React.FC<CRReviewPortalProps> = ({
   };
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="w-full max-w-screen-xl mx-auto space-y-6 pt-4 px-4 pb-12 sm:px-6 lg:px-8">
       {/* CR Portal Banner */}
       <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

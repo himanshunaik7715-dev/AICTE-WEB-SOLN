@@ -1,9 +1,11 @@
 import { User } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { UserProfile, AdminUser } from '../types';
-import { SEEDED_PROFILES, saveUserProfileToDb, addAdminToDb, getUserProfileByEmail } from './dbService';
+import { SEEDED_PROFILES, saveUserProfileToDb, addAdminToDb, getUserProfileByEmail, clearDbCaches } from './dbService';
 import { sendWelcomeEmail } from './emailClient';
 import { jwtDecode } from 'jwt-decode';
+import { parseStudentUID } from '../utils/parseStudentUID';
+import { isStudentProfileComplete } from '../utils/studentProfile';
 
 export interface AuthState {
   supabaseUser: User | null;
@@ -13,7 +15,7 @@ export interface AuthState {
 
 export type GoogleLoginResult = 
   | { profileNeeded: false; profile: UserProfile }
-  | { profileNeeded: true; email: string; name: string };
+  | { profileNeeded: true; email: string; name: string; existingProfile?: UserProfile };
 
 /**
  * Check if a registered account exists in Supabase Auth (auth.users)
@@ -55,6 +57,14 @@ export async function loginWithGoogle(credential: string): Promise<GoogleLoginRe
   const existing = await getUserProfileByEmail(email) || SEEDED_PROFILES.find((p) => p.email.toLowerCase() === email.toLowerCase());
 
   if (existing) {
+    if (existing.role === 'student' && !isStudentProfileComplete(existing)) {
+      return {
+        profileNeeded: true,
+        email: existing.email,
+        name: existing.name,
+        existingProfile: existing,
+      };
+    }
     return { profileNeeded: false, profile: existing };
   }
 
@@ -64,6 +74,66 @@ export async function loginWithGoogle(credential: string): Promise<GoogleLoginRe
     email: email, 
     name: decoded.name || email.split('@')[0] 
   };
+}
+
+/**
+ * Complete or update a student profile after onboarding.
+ * Saves to DB, re-fetches, and returns the persisted profile.
+ */
+export async function completeStudentProfile(
+  email: string,
+  name: string,
+  data: {
+    studentUid: string;
+    erpNo: string;
+    phoneNumber: string;
+    course?: string;
+    department?: string;
+    division?: string;
+    rollNo?: string | number;
+  },
+  existingProfile?: UserProfile
+): Promise<UserProfile> {
+  const parsed = parseStudentUID(data.studentUid);
+  if (!parsed) {
+    throw new Error('Invalid Student UID format. Example: 25-CSE(IOT)B01-29');
+  }
+
+  const profile: UserProfile = {
+    ...(existingProfile || {}),
+    id: existingProfile?.id || 'STU-GOOGLE-' + Date.now(),
+    name: name.trim(),
+    email: email.trim().toLowerCase(),
+    role: 'student',
+    studentUid: parsed.uid,
+    phoneNumber: data.phoneNumber.trim(),
+    course: data.course || parsed.rawCourse,
+    rollNo: String(data.rollNo ?? parsed.rollNumber),
+    erpNo: data.erpNo.trim(),
+    department: data.department || parsed.department,
+    division: data.division || parsed.division,
+    academicBatch: parsed.academicBatch,
+    tgmApprovalStatus: 'approved',
+    crName: existingProfile?.crName,
+    tgmName: existingProfile?.tgmName,
+    driveRootFolderId: existingProfile?.driveRootFolderId,
+  };
+
+  await saveUserProfileToDb(profile, { throwOnError: true });
+
+  const saved = await getUserProfileByEmail(profile.email);
+  if (!saved) {
+    throw new Error('Failed to save profile. Please try again.');
+  }
+  if (!isStudentProfileComplete(saved)) {
+    throw new Error('Profile was saved but is still incomplete. Please try again.');
+  }
+
+  sendWelcomeEmail({ email: saved.email, name: saved.name, role: 'student' }).catch(
+    (err) => console.warn('Notice: Welcome email send background trigger:', err)
+  );
+
+  return saved;
 }
 
 /**
@@ -90,8 +160,8 @@ export async function completeGoogleSignUp(
     role,
     tgmApprovalStatus: requiresApproval ? 'pending' : 'approved',
     customRole: profileData.customRole || undefined,
-    crName: profileData.crName || (role === 'student' ? `Ananya Verma (CR - Div ${profileData.division || 'A'})` : undefined),
-    tgmName: profileData.tgmName || (role === 'student' ? 'Prof. S. K. Mehta (Senior TGM)' : undefined),
+    crName: profileData.crName,
+    tgmName: profileData.tgmName,
   };
 
   await saveUserProfileToDb(newProfile);
@@ -140,6 +210,7 @@ export async function logoutUser(): Promise<void> {
   if (isSupabaseConfigured) {
     await supabase.auth.signOut();
   }
+  clearDbCaches();
 }
 
 /**
@@ -178,30 +249,6 @@ export async function loginWithManualCredentials(
     matchedUser = (await getUserProfileByEmail(email)) || SEEDED_PROFILES.find((p) => p.email.toLowerCase() === email);
   }
 
-  // Hardcoded fallback check for default CR credentials (cr@tcetmumbai.in / 2026@tcetiotcr)
-  if (email === 'cr@tcetmumbai.in') {
-    if (password !== '2026@tcetiotcr') {
-      throw new Error('Invalid email or password.');
-    }
-    if (matchedUser) {
-      return { ...matchedUser, password: '2026@tcetiotcr', tgmApprovalStatus: 'approved' };
-    }
-    return {
-      id: 'CR-TCET-2026',
-      name: 'Class Representative (CR)',
-      email: 'cr@tcetmumbai.in',
-      password: '2026@tcetiotcr',
-      role: 'cr',
-      rollNo: '7',
-      erpNo: '2023011100',
-      department: 'Internet of Things (IoT)',
-      division: 'A',
-      academicBatch: '2023-2027',
-      tgmApprovalStatus: 'approved',
-      crName: 'Class Representative (CR)',
-      tgmName: 'Prof. S. K. Mehta (TGM)',
-    };
-  }
 
   if (!matchedUser) {
     throw new Error('Invalid email or password.');
@@ -279,7 +326,6 @@ export async function registerClubHeadAccount(params: {
     academicBatch: '2023-2027',
     tgmApprovalStatus: 'pending',
     crName: formattedClubTitle,
-    tgmName: 'Prof. S. K. Mehta (Senior TGM)',
   };
 
   await saveUserProfileToDb(newProfile);

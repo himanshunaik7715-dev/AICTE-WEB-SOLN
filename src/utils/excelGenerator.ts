@@ -3,6 +3,25 @@ import { CertificateSubmission, UserProfile } from '../types';
 import { SEMESTER_TARGETS, AICTE_CATEGORIES } from '../constants/aicteData';
 import { getDriveFileWebUrl, getDriveFolderWebUrl } from '../services/driveService';
 
+// Helper function to auto-fit column widths based on cell content length
+const getAutoFitColumns = (data: any[][]) => {
+  const colWidths: { wch: number }[] = [];
+  data.forEach((row) => {
+    if (Array.isArray(row)) {
+      row.forEach((cell, i) => {
+        const cellValue = cell !== null && cell !== undefined ? String(cell) : '';
+        const cellLength = cellValue.length + 2; // +2 for padding
+        if (!colWidths[i]) {
+          colWidths[i] = { wch: Math.min(Math.max(cellLength, 10), 100) }; // min 10, max 100
+        } else if (cellLength > colWidths[i].wch) {
+          colWidths[i].wch = Math.min(cellLength, 100);
+        }
+      });
+    }
+  });
+  return colWidths;
+};
+
 /**
  * Generate a complete, formatted Excel (.xlsx) Activity Points Report for an individual student
  */
@@ -32,7 +51,7 @@ export function generateStudentActivityExcel(
     ['Division & Academic Batch', `Div ${student.division} | Batch ${student.academicBatch}`],
     ['Institutional Email', student.email],
     ['Teacher Guardian Mentor (TGM)', student.tgmName || 'Prof. S. K. Mehta (TGM)'],
-    ['Class Representative (CR)', student.crName || 'Ananya Verma (CR)'],
+    ['Class Representative (CR)', student.crName || 'Not Assigned'],
     ['Google Drive Root Folder Link', getDriveFolderWebUrl(student.driveRootFolderId)],
     ['Google Drive Root Folder ID / Key', student.driveRootFolderId || `drive_folder_${student.erpNo}`],
     [''],
@@ -44,7 +63,7 @@ export function generateStudentActivityExcel(
   ];
 
   const wsProfile = XLSX.utils.aoa_to_sheet(profileData);
-  wsProfile['!cols'] = [{ wch: 35 }, { wch: 55 }];
+  wsProfile['!cols'] = getAutoFitColumns(profileData);
   XLSX.utils.book_append_sheet(wb, wsProfile, 'Student Profile');
 
   // -------------------------------------------------------------
@@ -82,16 +101,7 @@ export function generateStudentActivityExcel(
   });
 
   const wsSem = XLSX.utils.aoa_to_sheet([semHeaders, ...semRows]);
-  wsSem['!cols'] = [
-    { wch: 15 },
-    { wch: 20 },
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 22 },
-    { wch: 22 },
-    { wch: 22 },
-    { wch: 25 },
-  ];
+  wsSem['!cols'] = getAutoFitColumns([semHeaders, ...semRows]);
   XLSX.utils.book_append_sheet(wb, wsSem, 'Semester Matrix');
 
   // -------------------------------------------------------------
@@ -141,24 +151,7 @@ export function generateStudentActivityExcel(
   });
 
   const wsSubmissions = XLSX.utils.aoa_to_sheet([subHeaders, ...subRows]);
-  wsSubmissions['!cols'] = [
-    { wch: 15 },
-    { wch: 12 },
-    { wch: 35 },
-    { wch: 28 },
-    { wch: 12 },
-    { wch: 30 },
-    { wch: 12 },
-    { wch: 16 },
-    { wch: 18 },
-    { wch: 20 },
-    { wch: 18 },
-    { wch: 20 },
-    { wch: 16 },
-    { wch: 30 },
-    { wch: 50 },
-    { wch: 22 },
-  ];
+  wsSubmissions['!cols'] = getAutoFitColumns([subHeaders, ...subRows]);
   XLSX.utils.book_append_sheet(wb, wsSubmissions, 'Activity Submissions');
 
   // -------------------------------------------------------------
@@ -175,14 +168,7 @@ export function generateStudentActivityExcel(
   ]);
 
   const wsCategories = XLSX.utils.aoa_to_sheet([catHeaders, ...catRows]);
-  wsCategories['!cols'] = [
-    { wch: 8 },
-    { wch: 35 },
-    { wch: 15 },
-    { wch: 60 },
-    { wch: 18 },
-    { wch: 14 },
-  ];
+  wsCategories['!cols'] = getAutoFitColumns([catHeaders, ...catRows]);
   XLSX.utils.book_append_sheet(wb, wsCategories, 'AICTE 15 Categories');
 
   // Trigger Download
@@ -251,30 +237,24 @@ export function generateClassProgressExcel(
     ];
   });
 
-  const ws = XLSX.utils.aoa_to_sheet([
+  const sheetData = [
     [`THAKUR COLLEGE OF ENGINEERING & TECHNOLOGY — DEPARTMENT CLASS MATRIX (${deptName})`],
     [`Generated Date: ${new Date().toLocaleString()}`],
     [''],
     headers,
     ...rows,
-  ]);
-
-  ws['!cols'] = [
-    { wch: 15 },
-    { wch: 25 },
-    { wch: 15 },
-    { wch: 15 },
-    { wch: 25 },
-    { wch: 10 },
-    { wch: 15 },
-    { wch: 22 },
-    { wch: 20 },
-    { wch: 25 },
-    { wch: 22 },
-    { wch: 20 },
-    { wch: 25 },
-    { wch: 25 },
   ];
+
+  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+  ws['!cols'] = getAutoFitColumns(sheetData);
+
+  // Enable native Excel AutoFilter on the header row (row 4, 0-indexed row 3)
+  // sheetData rows 0-2 are title/date/blank, row 3 is the headers
+  const headerRowIndex = 3;
+  const numCols = headers.length;
+  const endCol = XLSX.utils.encode_col(numCols - 1);
+  ws['!autofilter'] = { ref: `A${headerRowIndex + 1}:${endCol}${headerRowIndex + 1}` };
 
   XLSX.utils.book_append_sheet(wb, ws, 'Class Matrix');
 

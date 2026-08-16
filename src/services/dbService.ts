@@ -13,6 +13,12 @@ import {
   STUDENT_SNEHA,
   STUDENT_AARAV,
   SUPERADMIN_PROFILE,
+  CR_A1,
+  CR_A2,
+  CR_B1,
+  CR_B2,
+  CR_2024_1,
+  CR_2024_2,
 } from '../constants/aicteData';
 
 // Local storage key constants for seamless offline/fallback state
@@ -37,8 +43,6 @@ export const SEEDED_PROFILES: UserProfile[] = [
     department: 'Internet of Things (IoT)',
     division: 'A',
     academicBatch: '2023-2027',
-    tgmName: 'Prof. S. K. Mehta (TGM)',
-    crName: 'Ananya Verma (CR)',
     driveRootFolderId: 'drive_folder_priya_singh_2023',
   },
   {
@@ -51,10 +55,17 @@ export const SEEDED_PROFILES: UserProfile[] = [
     department: 'Internet of Things (IoT)',
     division: 'A',
     academicBatch: '2023-2027',
-    tgmName: 'Prof. S. K. Mehta (TGM)',
-    crName: 'Ananya Verma (CR)',
     driveRootFolderId: 'drive_folder_amit_patel_2023',
   },
+  // CR Accounts — Division A
+  CR_A1,
+  CR_A2,
+  // CR Accounts — Division B
+  CR_B1,
+  CR_B2,
+  CR_2024_1,
+  CR_2024_2,
+  // Legacy CR account (Division A)
   {
     id: 'CR-TCET-2026',
     name: 'Class Representative (CR)',
@@ -66,7 +77,6 @@ export const SEEDED_PROFILES: UserProfile[] = [
     department: 'Internet of Things (IoT)',
     division: 'A',
     academicBatch: '2023-2027',
-    tgmName: 'Prof. S. K. Mehta (TGM)',
     crName: 'Class Representative (CR)',
     tgmApprovalStatus: 'approved',
     driveRootFolderId: 'drive_folder_cr_tcet',
@@ -81,7 +91,6 @@ export const SEEDED_PROFILES: UserProfile[] = [
     department: 'Internet of Things (IoT)',
     division: 'All IoT Divisions',
     academicBatch: 'Faculty Guide',
-    tgmName: 'Prof. S. K. Mehta (TGM)',
     tgmApprovalStatus: 'approved',
   },
   {
@@ -100,15 +109,10 @@ export const SEEDED_PROFILES: UserProfile[] = [
 
 function loadUsersFromLocalStorage(): UserProfile[] {
   const users = loadFromLocalStorage<UserProfile[]>(LS_USERS_KEY, SEEDED_PROFILES);
-  const crExists = users.some((u) => u.email.toLowerCase() === 'cr@tcetmumbai.in');
-  if (!crExists) {
-    const defaultCr = SEEDED_PROFILES.find((u) => u.email.toLowerCase() === 'cr@tcetmumbai.in');
-    if (defaultCr) users.push(defaultCr);
-  } else {
-    const cr = users.find((u) => u.email.toLowerCase() === 'cr@tcetmumbai.in');
-    if (cr) {
-      cr.password = '2026@tcetiotcr';
-      cr.tgmApprovalStatus = 'approved';
+  // Ensure all seeded CR accounts exist in the local cache
+  for (const seeded of SEEDED_PROFILES) {
+    if (seeded.role === 'cr' && !users.some((u) => u.id === seeded.id)) {
+      users.push(seeded);
     }
   }
   return users;
@@ -178,7 +182,8 @@ export async function seedInitialDatabase(force: boolean = false): Promise<void>
     }
 
     if (force || !existingUsers || existingUsers.length === 0) {
-      const { error } = await supabase.from('users').upsert(cachedUsers);
+      const usersToSeed = cachedUsers.map(({ password, ...user }) => user as any);
+      const { error } = await supabase.from('users').upsert(usersToSeed);
       if (error) console.error('Users seeding error:', error.message);
     }
 
@@ -202,16 +207,28 @@ export async function seedInitialDatabase(force: boolean = false): Promise<void>
  * Subscribe to Submissions (Supabase + Local fallback)
  */
 export function subscribeToSubmissions(
+  role: string | null,
+  userId: string | null,
   callback: (submissions: CertificateSubmission[]) => void
 ) {
   submissionListeners.push(callback);
   callback([...cachedSubmissions]);
 
   if (isSupabaseConfigured) {
-    // Fetch initial from Supabase
-    supabase
-      .from('submissions')
-      .select('*')
+    // Early-exit when unauthenticated — still return a valid cleanup fn
+    if (role === 'auth' || !role) {
+      return () => {
+        const idx = submissionListeners.indexOf(callback);
+        if (idx !== -1) submissionListeners.splice(idx, 1);
+      };
+    }
+
+    let query = supabase.from('submissions').select('*');
+    if (role === 'student' && userId) {
+      query = query.eq('studentId', userId);
+    }
+    
+    query
       .then(({ data, error }) => {
         if (!error && data && data.length > 0) {
           const sorted = (data as CertificateSubmission[]).sort(
@@ -224,13 +241,18 @@ export function subscribeToSubmissions(
         }
       });
 
-    // Subscribe to realtime changes
+    // Use a unique channel name to avoid re-subscription collisions
+    const channelName = `submissions:${role}:${userId ?? 'all'}:${Date.now()}`;
     const channel = supabase
-      .channel('public:submissions')
+      .channel(channelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'submissions' }, () => {
-        supabase
-          .from('submissions')
-          .select('*')
+        if (role === 'auth' || !role) return;
+
+        let rtQuery = supabase.from('submissions').select('*');
+        if (role === 'student' && userId) {
+          rtQuery = rtQuery.eq('studentId', userId);
+        }
+        rtQuery
           .then(({ data }) => {
             if (data) {
               const sorted = (data as CertificateSubmission[]).sort(
@@ -274,8 +296,9 @@ export function subscribeToAdmins(callback: (admins: AdminUser[]) => void) {
         }
       });
 
+    const adminChannelName = `admins:${Date.now()}`;
     const channel = supabase
-      .channel('public:admins')
+      .channel(adminChannelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'admins' }, () => {
         supabase
           .from('admins')
@@ -305,14 +328,29 @@ export function subscribeToAdmins(callback: (admins: AdminUser[]) => void) {
 /**
  * Subscribe to User Profiles
  */
-export function subscribeToUsers(callback: (users: UserProfile[]) => void) {
+export function subscribeToUsers(
+  role: string | null,
+  userId: string | null,
+  callback: (users: UserProfile[]) => void
+) {
   userListeners.push(callback);
   callback([...cachedUsers]);
 
   if (isSupabaseConfigured) {
-    supabase
-      .from('users')
-      .select('*')
+    // Early-exit when unauthenticated — still return a valid cleanup fn
+    if (role === 'auth' || !role) {
+      return () => {
+        const idx = userListeners.indexOf(callback);
+        if (idx !== -1) userListeners.splice(idx, 1);
+      };
+    }
+
+    let query = supabase.from('users').select('*');
+    if (role === 'student' && userId) {
+      query = query.or(`id.eq.${userId},role.eq.cr,role.eq.admin,role.eq.superadmin`);
+    }
+
+    query
       .then(({ data, error }) => {
         if (!error && data && data.length > 0) {
           cachedUsers = data as UserProfile[];
@@ -320,12 +358,18 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void) {
         }
       });
 
+    const usersChannelName = `users:${role}:${userId ?? 'all'}:${Date.now()}`;
     const channel = supabase
-      .channel('public:users')
+      .channel(usersChannelName)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => {
-        supabase
-          .from('users')
-          .select('*')
+        if (role === 'auth' || !role) return;
+
+        let rtQuery = supabase.from('users').select('*');
+        if (role === 'student' && userId) {
+          rtQuery = rtQuery.or(`id.eq.${userId},role.eq.cr,role.eq.admin,role.eq.superadmin`);
+        }
+        
+        rtQuery
           .then(({ data }) => {
             if (data) {
               cachedUsers = data as UserProfile[];
@@ -354,6 +398,15 @@ export function subscribeToUsers(callback: (users: UserProfile[]) => void) {
 export async function saveSubmissionToDb(
   submission: CertificateSubmission
 ): Promise<void> {
+  if (isSupabaseConfigured) {
+    const { assignedCrName, assignedTgmName, fileDataUrl, ...dbSubmission } = submission;
+    const { error } = await supabase.from('submissions').upsert(dbSubmission);
+    if (error) {
+      console.error('Supabase saveSubmissionToDb error:', error.message);
+      throw new Error(`Failed to save submission: ${error.message}`);
+    }
+  }
+
   const existingIdx = cachedSubmissions.findIndex((s) => s.id === submission.id);
   if (existingIdx !== -1) {
     cachedSubmissions[existingIdx] = submission;
@@ -361,13 +414,6 @@ export async function saveSubmissionToDb(
     cachedSubmissions.unshift(submission);
   }
   notifySubmissions();
-
-  if (isSupabaseConfigured) {
-    const { error } = await supabase.from('submissions').upsert(submission);
-    if (error) {
-      console.error('Supabase saveSubmissionToDb error:', error.message);
-    }
-  }
 }
 
 /**
@@ -377,28 +423,28 @@ export async function updateSubmissionInDb(
   id: string,
   updateFields: Partial<CertificateSubmission>
 ): Promise<void> {
-  const existingIdx = cachedSubmissions.findIndex((s) => s.id === id);
-  if (existingIdx !== -1) {
-    cachedSubmissions[existingIdx] = {
-      ...cachedSubmissions[existingIdx],
-      ...updateFields,
-      updatedAt: new Date().toISOString(),
-    };
-    notifySubmissions();
-  }
+  const updatedData = { ...updateFields, updatedAt: new Date().toISOString() };
 
   if (isSupabaseConfigured) {
+    const { assignedCrName, assignedTgmName, fileDataUrl, ...dbUpdateFields } = updatedData;
     const { error } = await supabase
       .from('submissions')
-      .update({
-        ...updateFields,
-        updatedAt: new Date().toISOString(),
-      })
+      .update(dbUpdateFields)
       .eq('id', id);
 
     if (error) {
       console.error('Supabase updateSubmissionInDb error:', error.message);
+      throw new Error(`Failed to update submission: ${error.message}`);
     }
+  }
+
+  const existingIdx = cachedSubmissions.findIndex((s) => s.id === id);
+  if (existingIdx !== -1) {
+    cachedSubmissions[existingIdx] = {
+      ...cachedSubmissions[existingIdx],
+      ...updatedData,
+    };
+    notifySubmissions();
   }
 }
 
@@ -440,7 +486,10 @@ export async function removeAdminFromDb(id: string): Promise<void> {
 /**
  * Create or update a user profile
  */
-export async function saveUserProfileToDb(profile: UserProfile): Promise<void> {
+export async function saveUserProfileToDb(
+  profile: UserProfile,
+  options?: { throwOnError?: boolean }
+): Promise<void> {
   const idx = cachedUsers.findIndex((u) => u.id === profile.id);
   if (idx !== -1) {
     cachedUsers[idx] = profile;
@@ -450,9 +499,15 @@ export async function saveUserProfileToDb(profile: UserProfile): Promise<void> {
   notifyUsers();
 
   if (isSupabaseConfigured) {
-    const { error } = await supabase.from('users').upsert(profile);
+    // Strip fields that don't exist in the Supabase `users` table schema
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _pw, ...dbProfile } = profile as UserProfile & { password?: string };
+    const { error } = await supabase.from('users').upsert(dbProfile);
     if (error) {
       console.error('Supabase saveUserProfileToDb error:', error.message);
+      if (options?.throwOnError) {
+        throw new Error(error.message || 'Failed to save profile to database.');
+      }
     }
   }
 }
@@ -635,5 +690,18 @@ export async function rejectTgmUserInDb(userIdOrEmail: string): Promise<void> {
     status: 'rejected',
     approvedBy: 'Super Admin Office',
   }).catch((e) => console.warn('Rejection email send notice:', e));
+}
+
+/**
+ * Clear memory caches when a user logs out to prevent data leakage across sessions
+ */
+export function clearDbCaches(): void {
+  cachedSubmissions = INITIAL_SUBMISSIONS;
+  cachedUsers = loadUsersFromLocalStorage();
+  cachedAdmins = INITIAL_ADMINS;
+  
+  notifySubmissions();
+  notifyUsers();
+  notifyAdmins();
 }
 
