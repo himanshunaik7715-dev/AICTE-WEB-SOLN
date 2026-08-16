@@ -403,7 +403,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   </button>
 
                   {/* Default CR hint */}
-                  <div className="bg-rose-50/60 border border-rose-100 rounded-xl p-3 text-[11px] text-rose-800 flex items-start gap-2">
+                  {/* <div className="bg-rose-50/60 border border-rose-100 rounded-xl p-3 text-[11px] text-rose-800 flex items-start gap-2">
                     <Sparkles className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
                     <div>
                       <strong>Default CR Credentials:</strong>
@@ -412,7 +412,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       {' | '}
                       Password: <code className="font-mono font-bold bg-white px-1 py-0.5 rounded border border-rose-200">2026@tcetiotcr</code>
                     </div>
-                  </div>
+                  </div> */}
                 </form>
               )}
 
