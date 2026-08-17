@@ -92,7 +92,7 @@ app.get('/health', (_req, res) => {
 // =========================================================
 
 app.post(
-  'https://aicte-web-soln.onrender.com/api/drive/fetch-folder-files',
+  '/api/drive/fetch-folder-files',
   async (req, res) => {
     try {
       const {
