@@ -259,7 +259,7 @@ export async function fetchGoogleDriveFolderFiles(
   error?: string;
 }> {
   try {
-    const res = await fetch('/api/drive/fetch-folder-files', {
+    const res = await fetch('https://aicte-web-soln.onrender.com/api/drive/fetch-folder-files', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ folderUrlOrId, semester }),
