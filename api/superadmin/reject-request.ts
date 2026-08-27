@@ -39,12 +39,18 @@ export default async function handler(req: any, res: any) {
   ]);
   if (!profile && !admin) return res.status(404).json({ success: false, error: 'Pending request was not found' });
 
-  if (profile?.role === 'student') {
+  const isStudentIdentity = profile?.role === 'student' || /^\d+@tcetmumbai\.in$/i.test(profile?.email || admin?.email || '');
+  if (profile && isStudentIdentity) {
     if (admin) {
       const { error } = await db.from('admins').delete().eq('id', admin.id);
       if (error) return res.status(500).json({ success: false, error: error.message });
     }
-    const { error } = await db.from('users').update({ tgmApprovalStatus: 'approved' }).eq('id', profile.id);
+    const { error } = await db.from('users').update({
+      role: 'student',
+      tgmApprovalStatus: 'approved',
+      approvedBy: null,
+      approvedAt: null,
+    }).eq('id', profile.id);
     if (error) return res.status(500).json({ success: false, error: error.message });
     return res.status(200).json({ success: true, preservedAsStudent: true, email: profile.email });
   }
