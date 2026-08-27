@@ -36,19 +36,24 @@ export default async function handler(req: any, res: any) {
     return res.status(403).json({ success: false, error: 'Approved Superadmin access is required' });
   }
 
-  const [{ data: students, error: studentsError }, { data: faculty, error: facultyError }] = await Promise.all([
+  const [
+    { data: students, error: studentsError },
+    { data: faculty, error: facultyError },
+    { data: adminRows, error: adminsError },
+  ] = await Promise.all([
     db.from('users').select('id,tgmId,tgmName').eq('role', 'student'),
-    db.from('users').select('id,name').eq('role', 'admin'),
+    db.from('users').select('id,name,email,role,department,tgmApprovalStatus').in('role', ['admin', 'superadmin']),
+    db.from('admins').select('id,name,email,department,designation,addedAt,addedBy,approvalStatus,isWhitelisted'),
   ]);
-  if (studentsError || facultyError) {
+  if (studentsError || facultyError || adminsError) {
     return res.status(500).json({
       success: false,
-      error: studentsError?.message || facultyError?.message || 'Unable to load dashboard counts',
+      error: studentsError?.message || facultyError?.message || adminsError?.message || 'Unable to load dashboard data',
     });
   }
 
   const assignedStudentCounts: Record<string, number> = {};
-  for (const tgm of faculty || []) {
+  for (const tgm of (faculty || []).filter((user) => user.role === 'admin')) {
     const normalizedName = String(tgm.name || '').trim().toLowerCase();
     assignedStudentCounts[tgm.id] = (students || []).filter((student) =>
       student.tgmId === tgm.id ||
@@ -56,10 +61,41 @@ export default async function handler(req: any, res: any) {
     ).length;
   }
 
+  const pendingRequests = new Map<string, any>();
+  for (const user of (faculty || []).filter((row) => row.tgmApprovalStatus === 'pending')) {
+    if (user.email.toLowerCase() === 'superadmin@tcetmumbai.in') continue;
+    pendingRequests.set(user.email.toLowerCase(), {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      department: user.department || 'Internet of Things (IoT)',
+      designation: user.role === 'superadmin' ? 'Super Admin (Applicant)' : 'Teacher Guardian Mentor (TGM)',
+      date: 'Recent Sign-Up Request',
+      role: user.role,
+    });
+  }
+  for (const row of (adminRows || []).filter((admin) =>
+    admin.approvalStatus === 'pending' || !admin.isWhitelisted || String(admin.addedBy || '').includes('Request'),
+  )) {
+    const isSuperadmin =
+      String(row.designation || '').toLowerCase().includes('super admin') ||
+      String(row.addedBy || '').toLowerCase().includes('super admin');
+    pendingRequests.set(row.email.toLowerCase(), {
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      department: row.department || 'Internet of Things (IoT)',
+      designation: row.designation || (isSuperadmin ? 'Super Admin (Applicant)' : 'Teacher Guardian Mentor (TGM)'),
+      date: row.addedAt || 'Recent Sign-Up Request',
+      role: isSuperadmin ? 'superadmin' : 'admin',
+    });
+  }
+
   return res.status(200).json({
     success: true,
     registeredStudents: students?.length || 0,
     studentsWithSelectedTgm: (students || []).filter((student) => Boolean(student.tgmId)).length,
     assignedStudentCounts,
+    pendingRequests: Array.from(pendingRequests.values()),
   });
 }

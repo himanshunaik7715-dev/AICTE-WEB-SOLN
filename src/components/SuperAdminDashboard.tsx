@@ -33,6 +33,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [serverAssignmentCounts, setServerAssignmentCounts] = useState<{
     studentsWithSelectedTgm: number;
     assignedStudentCounts: Record<string, number>;
+    pendingRequests: Array<{ id: string; name: string; email: string; department: string; designation: string; date: string; role: 'admin' | 'superadmin' }>;
   } | null>(null);
 
   const allowedDepartments = ['Internet of Things (IoT)', 'CSE (Internet of Things)'] as const;
@@ -59,6 +60,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         setServerAssignmentCounts({
           studentsWithSelectedTgm: Number(counts.studentsWithSelectedTgm || 0),
           assignedStudentCounts: counts.assignedStudentCounts || {},
+          pendingRequests: counts.pendingRequests || [],
         });
       }
     };
@@ -104,6 +106,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       date: a.addedAt || 'Recent Sign-Up Request',
       role: isSuperApp ? 'superadmin' : 'admin',
     });
+  });
+
+  serverAssignmentCounts?.pendingRequests.forEach((request) => {
+    pendingRequestsMap.set(request.email.toLowerCase(), request);
   });
 
   const allPendingRequests = Array.from(pendingRequestsMap.values());
