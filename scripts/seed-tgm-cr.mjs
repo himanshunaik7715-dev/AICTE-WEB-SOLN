@@ -12,7 +12,7 @@ const supabase = createClient(url, serviceKey, {
 
 const faculty = [
   { name: 'Sonal Dubal', email: 'sonal.dubal@tcetmumbai.in', batch: '2025-2029', division: 'A', groups: ['ST-A1'] },
-  { name: 'Sakshi Sukhale', email: 'sakshi.sukhale@tcetmumbai.in', batch: '2025-2029', division: 'A', groups: ['ST-A2', 'ST-A3'] },
+  { name: 'Sakshi Sukale', email: 'sakshi.sukale@tcetmumbai.in', batch: '2025-2029', division: 'A', groups: ['ST-A2', 'ST-A3'] },
   { name: 'Usha Gupta', email: 'usha.gupta@tcetmumbai.in', batch: '2025-2029', division: 'B', groups: ['ST-B1'] },
   { name: 'Ashwini Haryan', email: 'ashwini.haryan@tcetmumbai.in', batch: '2025-2029', division: 'B', groups: ['ST-B2', 'ST-B3'] },
   { name: 'Amit Maurya', email: 'amit.maurya@tcetmumbai.in', batch: '2024-2028', division: '', groups: ['TT-E1'] },
