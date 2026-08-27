@@ -69,6 +69,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     const refreshTimer = window.setInterval(() => {
       void loadAssignedStudents();
     }, 15_000);
+    const handleDashboardRefresh = () => {
+      void loadAssignedStudents();
+    };
+    window.addEventListener('superadmin-dashboard-refresh', handleDashboardRefresh);
     const channel = supabase
       .channel(`superadmin-student-counts:${studentProfile.id}:${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, loadAssignedStudents)
@@ -77,6 +81,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     return () => {
       isMounted = false;
       window.clearInterval(refreshTimer);
+      window.removeEventListener('superadmin-dashboard-refresh', handleDashboardRefresh);
       void supabase.removeChannel(channel);
     };
   }, [studentProfile.id]);

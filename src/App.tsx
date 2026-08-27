@@ -848,11 +848,15 @@ export default function App() {
     async (
       userIdOrEmail: string
     ) => {
-      await approveTgmUserInDb(
-        userIdOrEmail,
-        activeProfile.name ||
-          "Super Admin"
-      );
+      try {
+        await approveTgmUserInDb(
+          userIdOrEmail,
+          activeProfile.name || "Super Admin"
+        );
+        window.alert("TGM request approved successfully.");
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : "Failed to approve the TGM request.");
+      }
     };
 
   const handleRejectTgmUser =

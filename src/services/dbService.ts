@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { apiUrl } from '../lib/api';
 import {
   CertificateSubmission,
   AdminUser,
@@ -382,6 +383,30 @@ export async function approveTgmUserInDb(
   approvedBy: string = 'Super Admin'
 ): Promise<void> {
   const normKey = userIdOrEmail.trim().toLowerCase();
+
+  if (isSupabaseConfigured) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) throw new Error('Authentication required. Please sign in again.');
+
+    const response = await fetch(apiUrl('/api/superadmin/approve-request'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userIdOrEmail, approvedBy }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(result?.error || 'Failed to approve the TGM request.');
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('superadmin-dashboard-refresh'));
+    }
+    return;
+  }
 
   // Search in cachedUsers by id or email
   let userIdx = cachedUsers.findIndex(
