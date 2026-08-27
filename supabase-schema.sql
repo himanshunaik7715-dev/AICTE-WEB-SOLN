@@ -185,7 +185,8 @@ BEGIN
       CASE WHEN NEW.role = 'student' THEN 'approved' ELSE 'pending' END;
     NEW."approvedBy" := NULL;
     NEW."approvedAt" := NULL;
-  ELSIF public.current_app_role() <> 'superadmin' THEN
+  ELSIF auth.role() IS DISTINCT FROM 'service_role'
+    AND public.current_app_role() IS DISTINCT FROM 'superadmin' THEN
     NEW.id := OLD.id;
     NEW.email := OLD.email;
     NEW.role := OLD.role;

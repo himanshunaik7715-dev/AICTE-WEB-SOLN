@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AdminUser, UserProfile } from '../types';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { apiUrl } from '../lib/api';
 import {
   ShieldCheck, Crown, UserCheck, UserX, UserPlus, Shield, Trash2, RotateCcw, Clock, Users, GraduationCap, CheckCircle2, X,
 } from 'lucide-react';
@@ -29,7 +30,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [newAdminName, setNewAdminName] = useState('');
   const [newAdminDesignation, setNewAdminDesignation] = useState('Teacher Guardian Mentor (TGM)');
   const [newAdminDept, setNewAdminDept] = useState('Internet of Things (IoT)');
-  const [assignedStudents, setAssignedStudents] = useState<UserProfile[] | null>(null);
+  const [serverAssignmentCounts, setServerAssignmentCounts] = useState<{
+    studentsWithSelectedTgm: number;
+    assignedStudentCounts: Record<string, number>;
+  } | null>(null);
 
   const allowedDepartments = ['Internet of Things (IoT)', 'CSE (Internet of Things)'] as const;
 
@@ -38,17 +42,25 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
     let isMounted = true;
     const loadAssignedStudents = async () => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id,name,email,role,tgmId,tgmName,tgGroup')
-        .eq('role', 'student');
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) return;
 
-      if (error) {
-        console.warn('Unable to load Super Admin student counts:', error.message);
+      const response = await fetch(apiUrl('/api/superadmin/dashboard-counts'), {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!response.ok) {
+        console.warn('Unable to load Super Admin student counts:', response.statusText);
         return;
       }
 
-      if (isMounted) setAssignedStudents((data || []) as UserProfile[]);
+      const counts = await response.json();
+      if (isMounted) {
+        setServerAssignmentCounts({
+          studentsWithSelectedTgm: Number(counts.studentsWithSelectedTgm || 0),
+          assignedStudentCounts: counts.assignedStudentCounts || {},
+        });
+      }
     };
 
     void loadAssignedStudents();
@@ -99,17 +111,26 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const pendingTgmRequests = allPendingRequests.filter((r) => r.role !== 'superadmin');
 
   const approvedTgms = allUsers.filter((u) => u.role === 'admin' && u.tgmApprovalStatus === 'approved');
-  const totalStudents = allUsers.filter((u) => u.role === 'student').length;
+  const studentsForAssignmentCounts = allUsers.filter((user) => user.role === 'student');
+  const studentsWithSelectedTgm = studentsForAssignmentCounts.filter(
+    (user) => user.role === 'student' && Boolean(user.tgmId),
+  );
+  const selectedTgmStudentCount = studentsWithSelectedTgm.length;
+  const displayedSelectedTgmStudentCount = serverAssignmentCounts?.studentsWithSelectedTgm
+    ?? (studentsForAssignmentCounts.length > 0 ? selectedTgmStudentCount : '—');
   const getAssignedStudentCount = (admin: AdminUser) => {
+    if (serverAssignmentCounts) {
+      return serverAssignmentCounts.assignedStudentCounts[admin.id] || 0;
+    }
     const linkedUser = allUsers.find(
       (user) => user.role === 'admin' && user.email.toLowerCase() === admin.email.toLowerCase(),
     );
     const tgmIds = new Set([admin.id, linkedUser?.id].filter((id): id is string => Boolean(id)));
     const normalizedAdminName = admin.name.trim().toLowerCase();
 
-    const students = assignedStudents ?? allUsers.filter((user) => user.role === 'student');
+    if (studentsForAssignmentCounts.length === 0) return '—';
 
-    return students.filter((user) => {
+    return studentsForAssignmentCounts.filter((user) => {
       if (user.role !== 'student') return false;
       if (user.tgmId && tgmIds.has(user.tgmId)) return true;
 
@@ -175,7 +196,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </div>
           <div className="grid w-full grid-cols-2 gap-2.5 md:w-auto xl:grid-cols-4">
             {[
-              { label: 'Total Students', value: totalStudents, color: 'text-slate-900' },
+              { label: 'Students with TGM', value: displayedSelectedTgmStudentCount, color: 'text-slate-900' },
               { label: 'Approved TGMs', value: approvedTgms.length, color: 'text-emerald-600' },
               { label: 'Pending TGM Requests', value: pendingTgmRequests.length, color: 'text-amber-600' },
               { label: 'Pending SuperAdmin', value: pendingSuperAdminRequests.length, color: 'text-indigo-600' },
@@ -372,7 +393,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       {/* System User Overview */}
       <div className="grid grid-cols-1 min-[481px]:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
-          { icon: Users, label: 'Total Registered Students', value: totalStudents, desc: 'Active in system', color: 'indigo' },
+          { icon: Users, label: 'Students with Selected TGM', value: displayedSelectedTgmStudentCount, desc: 'Assigned to a TGM', color: 'indigo' },
           { icon: ShieldCheck, label: 'Approved TGMs (from users table)', value: approvedTgms.length, desc: 'Stage-2 authorized', color: 'emerald' },
           { icon: GraduationCap, label: 'Whitelisted Faculty', value: admins.length, desc: 'In admin whitelist', color: 'purple' },
         ].map((card) => (

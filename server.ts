@@ -138,7 +138,12 @@ app.post('/api/auth/bootstrap-profile', requireAuth, async (_req, res) => {
     id: authUser.id,
     name: whitelist.name || authUser.user_metadata?.full_name || authUser.user_metadata?.name || email.split('@')[0],
     email,
-    role: 'admin',
+    role:
+      existing?.role === 'superadmin' ||
+      authUser.user_metadata?.seededRole === 'superadmin' ||
+      String(whitelist.designation || '').toLowerCase().includes('super admin')
+        ? 'superadmin'
+        : 'admin',
     rollNo: 'FAC',
     erpNo: `FAC-${email.split('@')[0].toUpperCase()}`,
     department: whitelist.department || 'Internet of Things (IoT)',
@@ -150,6 +155,61 @@ app.post('/api/auth/bootstrap-profile', requireAuth, async (_req, res) => {
   const { data, error } = await serviceClient.from('users').upsert(profile).select('*').single();
   if (error) return res.status(500).json({ success: false, error: error.message });
   return res.json({ success: true, recognized: true, profile: data });
+});
+
+app.get('/api/superadmin/dashboard-counts', requireAuth, async (_req, res) => {
+  if (!serviceClient) {
+    return res.status(503).json({ success: false, error: 'Server authentication is not configured' });
+  }
+
+  const authUser = res.locals.user;
+  const email = String(authUser.email).trim().toLowerCase();
+  const [{ data: profile }, { data: whitelist }] = await Promise.all([
+    serviceClient.from('users').select('id,role').eq('email', email).maybeSingle(),
+    serviceClient
+      .from('admins')
+      .select('id,designation,isWhitelisted,approvalStatus')
+      .eq('email', email)
+      .maybeSingle(),
+  ]);
+
+  const isApprovedSuperadmin =
+    profile?.id === authUser.id &&
+    profile.role === 'superadmin' &&
+    whitelist?.id === authUser.id &&
+    whitelist.isWhitelisted &&
+    whitelist.approvalStatus === 'approved';
+
+  if (!isApprovedSuperadmin) {
+    return res.status(403).json({ success: false, error: 'Approved Superadmin access is required' });
+  }
+
+  const [{ data: students, error: studentsError }, { data: faculty, error: facultyError }] = await Promise.all([
+    serviceClient.from('users').select('id,tgmId,tgmName').eq('role', 'student'),
+    serviceClient.from('users').select('id,name,email').eq('role', 'admin'),
+  ]);
+  if (studentsError || facultyError) {
+    return res.status(500).json({
+      success: false,
+      error: studentsError?.message || facultyError?.message || 'Unable to load dashboard counts',
+    });
+  }
+
+  const assignedStudentCounts: Record<string, number> = {};
+  for (const tgm of faculty || []) {
+    const normalizedName = String(tgm.name || '').trim().toLowerCase();
+    assignedStudentCounts[tgm.id] = (students || []).filter((student) =>
+      student.tgmId === tgm.id ||
+      (!student.tgmId && Boolean(student.tgmName) && String(student.tgmName).toLowerCase().includes(normalizedName)),
+    ).length;
+  }
+
+  return res.json({
+    success: true,
+    registeredStudents: students?.length || 0,
+    studentsWithSelectedTgm: (students || []).filter((student) => Boolean(student.tgmId)).length,
+    assignedStudentCounts,
+  });
 });
 
 

@@ -139,6 +139,18 @@ if (!process.argv.includes('--faculty-only')) for (const item of crAccounts) {
     .eq('email', item.email);
   if (approvalError) throw approvalError;
 
+  // Auth-user recreation changes the CR UUID. Keep student assignments in
+  // sync whenever this seed identifies an unambiguous batch + division.
+  if (item.division) {
+    const { error: relinkError } = await supabase
+      .from('users')
+      .update({ crId: authUser.id })
+      .eq('role', 'student')
+      .eq('academicBatch', item.batch)
+      .eq('division', item.division);
+    if (relinkError) throw relinkError;
+  }
+
   credentials.push({
     academicBatch: item.batch,
     cr: item.name,

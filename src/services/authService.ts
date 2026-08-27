@@ -117,7 +117,10 @@ export async function completeStudentProfile(
     academicBatch: parsed.academicBatch,
     tgmApprovalStatus: 'approved',
     crName: existingProfile?.crName,
+    crId: existingProfile?.crId,
     tgmName: existingProfile?.tgmName,
+    tgmId: existingProfile?.tgmId,
+    tgGroup: existingProfile?.tgGroup,
     driveRootFolderId: existingProfile?.driveRootFolderId,
   };
 
@@ -232,7 +235,43 @@ export async function loginWithManualCredentials(
   if (error || !data.user) {
     throw new Error('Invalid email or password.');
   }
-  const matchedUser = allUsers.find((u) => u.id === data.user.id) || await getUserProfileByEmail(email);
+  let matchedUser = allUsers.find((u) => u.id === data.user.id) || await getUserProfileByEmail(email);
+  if (!matchedUser || matchedUser.id !== data.user.id) {
+    await supabase.auth.signOut();
+    throw new Error('No application profile is linked to this account.');
+  }
+
+  // The bootstrap Superadmin has two approval records. If the profile status
+  // drifts while its identity-matched whitelist record remains approved,
+  // restore the profile before applying the normal access checks.
+  if (
+    allowedRole === 'superadmin' &&
+    email === 'superadmin@tcetmumbai.in' &&
+    matchedUser.role === 'superadmin' &&
+    matchedUser.tgmApprovalStatus !== 'approved'
+  ) {
+    const { data: whitelist } = await supabase
+      .from('admins')
+      .select('id,isWhitelisted,approvalStatus')
+      .eq('email', email)
+      .eq('id', data.user.id)
+      .maybeSingle();
+
+    if (whitelist?.isWhitelisted && whitelist.approvalStatus === 'approved') {
+      const accessToken = data.session?.access_token;
+      const response = accessToken
+        ? await fetch(apiUrl('/api/auth/bootstrap-profile'), {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}` },
+          })
+        : null;
+
+      if (response?.ok) {
+        matchedUser = await getUserProfileByEmail(email);
+      }
+    }
+  }
+
   if (!matchedUser || matchedUser.id !== data.user.id) {
     await supabase.auth.signOut();
     throw new Error('No application profile is linked to this account.');
