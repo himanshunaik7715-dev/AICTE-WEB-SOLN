@@ -220,7 +220,8 @@ app.get('/api/superadmin/dashboard-counts', requireAuth, async (_req, res) => {
     });
   }
   for (const row of (adminRows || []).filter((admin) =>
-    admin.approvalStatus === 'pending' || !admin.isWhitelisted || String(admin.addedBy || '').includes('Request'),
+    admin.approvalStatus === 'pending' ||
+    (admin.approvalStatus !== 'rejected' && !admin.isWhitelisted && String(admin.addedBy || '').includes('Request')),
   )) {
     const isSuperadmin = String(row.designation || '').toLowerCase().includes('super admin') || String(row.addedBy || '').toLowerCase().includes('super admin');
     pendingRequests.set(row.email.toLowerCase(), {

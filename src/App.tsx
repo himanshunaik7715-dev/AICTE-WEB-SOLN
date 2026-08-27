@@ -863,9 +863,12 @@ export default function App() {
     async (
       userIdOrEmail: string
     ) => {
-      await rejectTgmUserInDb(
-        userIdOrEmail
-      );
+      try {
+        await rejectTgmUserInDb(userIdOrEmail);
+        window.alert("Request rejected successfully.");
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : "Failed to reject the request.");
+      }
     };
 
   const handleUpdateProfile =

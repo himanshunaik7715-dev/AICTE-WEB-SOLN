@@ -502,6 +502,21 @@ export async function approveTgmUserInDb(
 export async function rejectTgmUserInDb(userIdOrEmail: string): Promise<void> {
   const normKey = userIdOrEmail.trim().toLowerCase();
 
+  if (isSupabaseConfigured) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) throw new Error('Authentication required. Please sign in again.');
+    const response = await fetch(apiUrl('/api/superadmin/reject-request'), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userIdOrEmail }),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(result?.error || 'Failed to reject the request.');
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('superadmin-dashboard-refresh'));
+    return;
+  }
+
   const userIdx = cachedUsers.findIndex(
     (u) => u.id === userIdOrEmail || u.email.trim().toLowerCase() === normKey
   );

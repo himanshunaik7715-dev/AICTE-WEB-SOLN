@@ -75,7 +75,8 @@ export default async function handler(req: any, res: any) {
     });
   }
   for (const row of (adminRows || []).filter((admin) =>
-    admin.approvalStatus === 'pending' || !admin.isWhitelisted || String(admin.addedBy || '').includes('Request'),
+    admin.approvalStatus === 'pending' ||
+    (admin.approvalStatus !== 'rejected' && !admin.isWhitelisted && String(admin.addedBy || '').includes('Request')),
   )) {
     const isSuperadmin =
       String(row.designation || '').toLowerCase().includes('super admin') ||
