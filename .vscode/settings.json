@@ -1,0 +1,6 @@
+{
+  "files.associations": {
+    "*.tsx.git": "typescriptreact",
+    "*.ts.git": "typescript"
+  }
+}

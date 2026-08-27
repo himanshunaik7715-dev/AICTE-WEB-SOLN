@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AdminUser, UserProfile } from '../types';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import {
   ShieldCheck, Crown, UserCheck, UserX, UserPlus, Shield, Trash2, RotateCcw, Clock, Users, GraduationCap, CheckCircle2, X,
 } from 'lucide-react';
@@ -28,6 +29,39 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [newAdminName, setNewAdminName] = useState('');
   const [newAdminDesignation, setNewAdminDesignation] = useState('Teacher Guardian Mentor (TGM)');
   const [newAdminDept, setNewAdminDept] = useState('Internet of Things (IoT)');
+  const [assignedStudents, setAssignedStudents] = useState<UserProfile[] | null>(null);
+
+  const allowedDepartments = ['Internet of Things (IoT)', 'CSE (Internet of Things)'] as const;
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    let isMounted = true;
+    const loadAssignedStudents = async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id,name,email,role,tgmId,tgmName,tgGroup')
+        .eq('role', 'student');
+
+      if (error) {
+        console.warn('Unable to load Super Admin student counts:', error.message);
+        return;
+      }
+
+      if (isMounted) setAssignedStudents((data || []) as UserProfile[]);
+    };
+
+    void loadAssignedStudents();
+    const channel = supabase
+      .channel(`superadmin-student-counts:${studentProfile.id}:${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, loadAssignedStudents)
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [studentProfile.id]);
 
   // Pending approvals
   const pendingRequestsMap = new Map<string, { id: string; name: string; email: string; department: string; designation: string; date: string; role: 'admin' | 'superadmin' }>();
@@ -66,6 +100,25 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const approvedTgms = allUsers.filter((u) => u.role === 'admin' && u.tgmApprovalStatus === 'approved');
   const totalStudents = allUsers.filter((u) => u.role === 'student').length;
+  const getAssignedStudentCount = (admin: AdminUser) => {
+    const linkedUser = allUsers.find(
+      (user) => user.role === 'admin' && user.email.toLowerCase() === admin.email.toLowerCase(),
+    );
+    const tgmIds = new Set([admin.id, linkedUser?.id].filter((id): id is string => Boolean(id)));
+    const normalizedAdminName = admin.name.trim().toLowerCase();
+
+    const students = assignedStudents ?? allUsers.filter((user) => user.role === 'student');
+
+    return students.filter((user) => {
+      if (user.role !== 'student') return false;
+      if (user.tgmId && tgmIds.has(user.tgmId)) return true;
+
+      // Also support labels such as "ST-B1 — Usha Gupta" and legacy records
+      // whose stored TGM ID no longer matches the current faculty profile ID.
+      return Boolean(user.tgmName)
+        && user.tgmName!.trim().toLowerCase().includes(normalizedAdminName);
+    }).length;
+  };
 
   const handleCreateAdmin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,12 +128,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   };
 
   // Pending authorization screen for unapproved super admins
-  const isSeedSuperAdmin = studentProfile.email.toLowerCase() === 'superadmin@tcetmumbai.in';
-  const isApprovedSuperAdmin = isSeedSuperAdmin || (studentProfile.role === 'superadmin' && (studentProfile.tgmApprovalStatus === 'approved' || admins.some((a) => a.email.toLowerCase() === studentProfile.email.toLowerCase() && (a.isWhitelisted || a.approvalStatus === 'approved'))));
+  const isApprovedSuperAdmin = studentProfile.role === 'superadmin' && (studentProfile.tgmApprovalStatus === 'approved' || admins.some((a) => a.email.toLowerCase() === studentProfile.email.toLowerCase() && (a.isWhitelisted || a.approvalStatus === 'approved')));
 
   if (!isApprovedSuperAdmin) {
     return (
-      <div className="bg-white rounded-3xl border border-amber-200 shadow-xl p-8 max-w-2xl mx-auto my-12 text-center space-y-6">
+      <div className="bg-white rounded-3xl border border-amber-200 shadow-xl p-4 sm:p-8 max-w-2xl mx-3 sm:mx-auto my-6 sm:my-12 text-center space-y-6">
         <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 shadow-xs">
           <Clock className="w-8 h-8 animate-pulse" />
         </div>
@@ -106,10 +158,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   }
 
   return (
-    <div className="w-full max-w-screen-xl mx-auto space-y-6 pt-4 px-4 pb-12 sm:px-6 lg:px-8">
+    <div className="w-full min-w-0 max-w-screen-xl mx-auto space-y-4 sm:space-y-6 pt-3 sm:pt-4 px-3 pb-10 sm:px-6 lg:px-8">
 
       {/* Super Admin Header */}
-      <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xs border border-slate-200">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-md border border-indigo-100">
@@ -121,14 +173,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               Manage TGM & Super Admin approvals, whitelist faculty, and administer system users.
             </p>
           </div>
-          <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="grid w-full grid-cols-2 gap-2.5 md:w-auto xl:grid-cols-4">
             {[
               { label: 'Total Students', value: totalStudents, color: 'text-slate-900' },
               { label: 'Approved TGMs', value: approvedTgms.length, color: 'text-emerald-600' },
               { label: 'Pending TGM Requests', value: pendingTgmRequests.length, color: 'text-amber-600' },
               { label: 'Pending SuperAdmin', value: pendingSuperAdminRequests.length, color: 'text-indigo-600' },
             ].map((stat) => (
-              <div key={stat.label} className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-[110px]">
+              <div key={stat.label} className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-0">
                 <span className={`text-2xl font-bold ${stat.color}`}>{stat.value}</span>
                 <p className="text-[10px] text-slate-500 font-semibold mt-0.5">{stat.label}</p>
               </div>
@@ -261,7 +313,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
       {/* Active Approved TGMs & Whitelist */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
           <div>
             <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
               <Shield className="w-5 h-5 text-indigo-600" />
@@ -269,7 +321,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             </h3>
             <p className="text-xs text-slate-500">Faculty members granted Stage-2 verification privileges.</p>
           </div>
-          <button type="button" onClick={() => setShowAddAdminModal(true)} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer">
+          <button type="button" onClick={() => setShowAddAdminModal(true)} className="flex w-full sm:w-auto items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer">
             <UserPlus className="w-4 h-4" /> Directly Whitelist Email
           </button>
         </div>
@@ -281,6 +333,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 <th className="py-3.5 px-4">Email Address</th>
                 <th className="py-3.5 px-4">Designation</th>
                 <th className="py-3.5 px-4">Department</th>
+                <th className="py-3.5 px-4 text-center">Students</th>
                 <th className="py-3.5 px-4">Added/Approved By</th>
                 <th className="py-3.5 px-4 text-center">Status</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
@@ -293,6 +346,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   <td className="py-3.5 px-4 font-mono text-slate-700">{admin.email}</td>
                   <td className="py-3.5 px-4 text-slate-800">{admin.designation}</td>
                   <td className="py-3.5 px-4 text-slate-600">{admin.department}</td>
+                  <td className="py-3.5 px-4 text-center">
+                    <span className="inline-flex min-w-8 items-center justify-center rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 font-bold text-indigo-700">
+                      {getAssignedStudentCount(admin)}
+                    </span>
+                  </td>
                   <td className="py-3.5 px-4 text-slate-500 text-[11px]">{admin.addedBy}</td>
                   <td className="py-3.5 px-4 text-center">
                     <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-semibold px-2.5 py-0.5 rounded-full">Approved & Whitelisted ✓</span>
@@ -312,7 +370,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       </div>
 
       {/* System User Overview */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 min-[481px]:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
           { icon: Users, label: 'Total Registered Students', value: totalStudents, desc: 'Active in system', color: 'indigo' },
           { icon: ShieldCheck, label: 'Approved TGMs (from users table)', value: approvedTgms.length, desc: 'Stage-2 authorized', color: 'emerald' },
@@ -334,7 +392,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       {/* Add Admin Modal */}
       {showAddAdminModal && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <form onSubmit={handleCreateAdmin} className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+          <form onSubmit={handleCreateAdmin} className="bg-white rounded-2xl max-w-md w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-emerald-600" /> Add Whitelisted Admin / TGM Email
@@ -362,8 +420,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Department (Restricted)</label>
-                <input type="text" readOnly value={newAdminDept} className="w-full border border-slate-300 bg-slate-100 text-slate-600 rounded-xl p-2.5 text-xs font-medium cursor-not-allowed" />
+                <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
+                <select
+                  value={newAdminDept}
+                  onChange={(e) => setNewAdminDept(e.target.value)}
+                  className="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-emerald-500/20 focus:outline-none cursor-pointer"
+                >
+                  {allowedDepartments.map((dept) => (
+                    <option key={dept} value={dept}>
+                      {dept}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">

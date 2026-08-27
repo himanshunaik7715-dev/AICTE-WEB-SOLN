@@ -6,7 +6,6 @@ import {
   UserProfile,
 } from '../types';
 import { SEMESTER_TARGETS, AICTE_CATEGORIES } from '../constants/aicteData';
-import { SEEDED_PROFILES } from '../services/dbService';
 import { generateClassProgressExcel, generateStudentActivityExcel } from '../utils/excelGenerator';
 import { getDriveFolderWebUrl } from '../services/driveService';
 import {
@@ -175,18 +174,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setShowAddAdminModal(false);
   };
 
-  const isSeedSuperAdmin = studentProfile.email.toLowerCase() === 'superadmin@tcetmumbai.in';
   const isSuperAdminRole = studentProfile.role === 'superadmin';
 
   const isApprovedSuperAdmin =
-    isSeedSuperAdmin ||
-    (isSuperAdminRole &&
+    isSuperAdminRole &&
       (studentProfile.tgmApprovalStatus === 'approved' ||
         admins.some(
           (a) =>
             a.email.toLowerCase() === studentProfile.email.toLowerCase() &&
             (a.isWhitelisted || a.approvalStatus === 'approved')
-        )));
+        ));
 
   // Redirect away from whitelist tab if user is not Super Admin
   React.useEffect(() => {
@@ -258,7 +255,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // Render pending authorization notice if user signed up as Super Admin and is not yet approved
   if (studentProfile.role === 'superadmin' && !isApprovedSuperAdmin) {
     return (
-      <div className="bg-white rounded-3xl border border-amber-200 shadow-xl p-8 max-w-2xl mx-auto my-12 text-center space-y-6">
+      <div className="bg-white rounded-3xl border border-amber-200 shadow-xl p-4 sm:p-8 max-w-2xl mx-3 sm:mx-auto my-6 sm:my-12 text-center space-y-6">
         <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 shadow-xs">
           <Clock className="w-8 h-8 animate-pulse" />
         </div>
@@ -309,7 +306,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // Render pending authorization notice if user is TGM and not yet approved by Super Admin
   if (studentProfile.role === 'admin' && !isApprovedTgm) {
     return (
-      <div className="bg-white rounded-3xl border border-amber-200 shadow-xl p-8 max-w-2xl mx-auto my-12 text-center space-y-6">
+      <div className="bg-white rounded-3xl border border-amber-200 shadow-xl p-4 sm:p-8 max-w-2xl mx-3 sm:mx-auto my-6 sm:my-12 text-center space-y-6">
         <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 shadow-xs">
           <Clock className="w-8 h-8 animate-pulse" />
         </div>
@@ -358,9 +355,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   }
 
   return (
-    <div className="w-full max-w-screen-xl mx-auto space-y-6 pt-4 px-4 pb-12 sm:px-6 lg:px-8">
+    <div className="w-full min-w-0 max-w-screen-xl mx-auto space-y-4 sm:space-y-6 pt-3 sm:pt-4 px-3 pb-10 sm:px-6 lg:px-8">
       {/* Admin Header */}
-      <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200 relative overflow-hidden">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xs border border-slate-200 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-md border border-indigo-100">
@@ -379,17 +376,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-[110px]">
+          <div className="grid w-full grid-cols-2 gap-2.5 md:w-auto xl:grid-cols-3">
+            <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-0">
               <span className="text-2xl font-bold text-amber-600">{stage2Queue.length}</span>
               <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Pending Stage-2</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-[110px]">
+            <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-0">
               <span className="text-2xl font-bold text-indigo-600">{approvedList.length}</span>
               <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Live Approved</p>
             </div>
             {isApprovedSuperAdmin && (
-              <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-[110px]">
+              <div className="col-span-2 xl:col-span-1 bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-0">
                 <span className="text-2xl font-bold text-slate-900">{admins.length}</span>
                 <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Whitelisted Admins</p>
               </div>
@@ -478,7 +475,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 </button>
               </div>
 
-              <div className="relative min-w-[160px]">
+              <div className="relative w-full md:w-auto md:min-w-40">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
                 <input
                   type="text"
@@ -898,13 +895,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
       {/* TAB 3: CLASS PROGRESS MATRIX (ALL STUDENTS) */}
       {activeTab === 'reports' && (() => {
-        const seedStudents = SEEDED_PROFILES.filter((p) => p.role === 'student');
         const studentMap = new Map<string, UserProfile>();
 
-        // 1. Add seeded students first
-        seedStudents.forEach((st) => studentMap.set(st.id, st));
-
-        // 2. Add all subscribed / registered users (from database / local session)
+        // Add all subscribed / registered users from the database.
         if (allUsers && allUsers.length > 0) {
           allUsers.forEach((u) => {
             if (u.role === 'student' || u.role === 'cr') {
@@ -999,7 +992,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           : '0';
 
         return (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 sm:p-6 space-y-6">
             {/* Header Title */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
@@ -1091,10 +1084,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   />
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex w-full flex-col sm:flex-row sm:items-center gap-2 lg:w-auto shrink-0">
                   <button
                     onClick={() => generateClassProgressExcel(filteredClassStudents, submissions, studentProfile.department || 'Internet of Things (IoT)')}
-                    className="bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    className="w-full sm:w-auto justify-center bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
                   >
                     <BarChart3 className="w-3.5 h-3.5 text-emerald-200" />
                     Export Matrix (.xlsx)
@@ -1347,7 +1340,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             {/* Student Certificate Log Modal */}
             {selectedStudentForModal && (
               <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[85vh] overflow-y-auto">
+                <div className="bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[calc(100dvh-1.5rem)] overflow-y-auto">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>
                       <h3 className="font-bold text-slate-900 text-lg">
@@ -1475,7 +1468,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       {/* TGM Action Modal */}
       {actionSubModal && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4">
             <h3 className="font-bold text-slate-900 text-base">
               {actionSubModal.type === 'approve' && 'Approve Entry & Credit Live Points'}
               {actionSubModal.type === 'reject' && 'Reject Certificate Submission'}
@@ -1532,7 +1525,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form
             onSubmit={handleCreateAdmin}
-            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4"
+            className="bg-white rounded-2xl max-w-md w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4"
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">

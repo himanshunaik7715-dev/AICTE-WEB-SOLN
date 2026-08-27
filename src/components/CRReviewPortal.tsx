@@ -61,9 +61,9 @@ export const CRReviewPortal: React.FC<CRReviewPortalProps> = ({
   };
 
   return (
-    <div className="w-full max-w-screen-xl mx-auto space-y-6 pt-4 px-4 pb-12 sm:px-6 lg:px-8">
+    <div className="w-full min-w-0 max-w-screen-xl mx-auto space-y-4 sm:space-y-6 pt-3 sm:pt-4 px-3 pb-10 sm:px-6 lg:px-8">
       {/* CR Portal Banner */}
-      <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200 relative overflow-hidden">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xs border border-slate-200 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="space-y-1.5 max-w-2xl">
             <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-md border border-indigo-100">
@@ -78,12 +78,12 @@ export const CRReviewPortal: React.FC<CRReviewPortalProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center min-w-[120px]">
+          <div className="grid w-full grid-cols-2 gap-3 md:w-auto">
+            <div className="bg-slate-50 border border-slate-200 p-3 sm:p-4 rounded-2xl text-center min-w-0">
               <span className="text-3xl font-bold text-amber-600">{pendingCrQueue.length}</span>
               <p className="text-[11px] text-slate-500 font-semibold mt-0.5">Pending Check</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center min-w-[120px]">
+            <div className="bg-slate-50 border border-slate-200 p-3 sm:p-4 rounded-2xl text-center min-w-0">
               <span className="text-3xl font-bold text-emerald-600">{validatedByCrList.length}</span>
               <p className="text-[11px] text-slate-500 font-semibold mt-0.5">Checked (✓)</p>
             </div>
@@ -94,7 +94,7 @@ export const CRReviewPortal: React.FC<CRReviewPortalProps> = ({
       {/* Main Review Section */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50">
-          <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col sm:flex-row sm:items-center gap-2 md:w-auto">
             <Clock className="w-5 h-5 text-amber-600" />
             <h3 className="font-bold text-slate-900 text-base">Stage-1 Verification Queue</h3>
             <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-0.5 rounded-full">
@@ -104,7 +104,7 @@ export const CRReviewPortal: React.FC<CRReviewPortalProps> = ({
 
           <div className="flex items-center gap-2">
             {/* Search */}
-            <div className="relative min-w-[200px]">
+            <div className="relative w-full sm:min-w-50">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
               <input
                 type="text"
@@ -241,7 +241,7 @@ export const CRReviewPortal: React.FC<CRReviewPortalProps> = ({
       {/* Resubmission Request Modal */}
       {resubmitModalSub && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4">
             <div className="flex items-center gap-3 text-orange-600">
               <div className="bg-orange-100 p-2 rounded-xl">
                 <AlertCircle className="w-6 h-6" />

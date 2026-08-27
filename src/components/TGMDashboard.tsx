@@ -6,9 +6,8 @@ import {
   UserProfile,
 } from '../types';
 import { SEMESTER_TARGETS, AICTE_CATEGORIES } from '../constants/aicteData';
-import { SEEDED_PROFILES } from '../services/dbService';
 import { generateClassProgressExcel, generateStudentActivityExcel } from '../utils/excelGenerator';
-import { getDriveFolderWebUrl } from '../services/driveService';
+import { getDriveFileWebUrl, getDriveFolderWebUrl } from '../services/driveService';
 import {
   ShieldCheck,
   CheckCircle2,
@@ -62,10 +61,7 @@ export const TGMDashboard: React.FC<TGMDashboardProps> = ({
   const [tgmRemarksInput, setTgmRemarksInput] = useState('');
 
   // ---------- Approval guards ----------
-  const isApprovedTgm =
-    activeProfile.tgmApprovalStatus === 'approved' ||
-    activeProfile.email.toLowerCase() === 'skmehta@tcetmumbai.in' ||
-    activeProfile.email.toLowerCase() === 'aicte_coordinator@tcetmumbai.in';
+  const isApprovedTgm = activeProfile.tgmApprovalStatus === 'approved';
 
   // ---------- OWN STUDENTS — filtered strictly by tgmId ----------
   const buildOwnStudentMap = () => {
@@ -76,13 +72,6 @@ export const TGMDashboard: React.FC<TGMDashboardProps> = ({
       if (u.role === 'student' && u.tgmId === activeProfile.id) {
         map.set(u.id, u);
       }
-    });
-
-    // From SEEDED_PROFILES as fallback seed
-    SEEDED_PROFILES.filter(
-      (p) => p.role === 'student' && p.tgmId === activeProfile.id
-    ).forEach((p) => {
-      if (!map.has(p.id)) map.set(p.id, p);
     });
 
     // From submissions — if a submission is in our queue (already filtered by App.tsx)
@@ -159,7 +148,7 @@ export const TGMDashboard: React.FC<TGMDashboardProps> = ({
   // ---------- Pending approval screen ----------
   if (!isApprovedTgm) {
     return (
-      <div className="bg-white rounded-3xl border border-amber-200 shadow-xl p-8 max-w-2xl mx-auto my-12 text-center space-y-6">
+      <div className="bg-white rounded-3xl border border-amber-200 shadow-xl p-4 sm:p-8 max-w-2xl mx-3 sm:mx-auto my-6 sm:my-12 text-center space-y-6">
         <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 shadow-xs">
           <Clock className="w-8 h-8 animate-pulse" />
         </div>
@@ -197,10 +186,10 @@ export const TGMDashboard: React.FC<TGMDashboardProps> = ({
   }
 
   return (
-    <div className="w-full max-w-screen-xl mx-auto space-y-6 pt-4 px-4 pb-12 sm:px-6 lg:px-8">
+    <div className="w-full min-w-0 max-w-screen-xl mx-auto space-y-4 sm:space-y-6 pt-3 sm:pt-4 px-3 pb-10 sm:px-6 lg:px-8">
 
       {/* TGM Identity Header */}
-      <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200 relative overflow-hidden">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xs border border-slate-200 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div className="space-y-1.5">
             <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 text-xs font-semibold px-3 py-1 rounded-md border border-indigo-100">
@@ -213,16 +202,16 @@ export const TGMDashboard: React.FC<TGMDashboardProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
-            <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-[110px]">
+          <div className="grid w-full grid-cols-2 gap-2.5 md:w-auto md:grid-cols-3">
+            <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-0">
               <span className="text-2xl font-bold text-amber-600">{stage2Queue.length}</span>
               <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Pending Stage-2</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-[110px]">
+            <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-0">
               <span className="text-2xl font-bold text-indigo-600">{approvedList.length}</span>
               <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Live Approved</p>
             </div>
-            <div className="bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-[110px]">
+            <div className="col-span-2 md:col-span-1 bg-slate-50 border border-slate-200 p-3 rounded-2xl text-center min-w-0">
               <span className="text-2xl font-bold text-slate-900">{ownStudentsList.length}</span>
               <p className="text-[10px] text-slate-500 font-semibold mt-0.5">My Students</p>
             </div>
@@ -268,8 +257,8 @@ export const TGMDashboard: React.FC<TGMDashboardProps> = ({
               </span>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative min-w-[160px]">
+            <div className="flex w-full flex-col sm:flex-row sm:items-center gap-2 flex-wrap md:w-auto">
+              <div className="relative w-full sm:min-w-40">
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
                 <input
                   type="text"
@@ -378,6 +367,40 @@ export const TGMDashboard: React.FC<TGMDashboardProps> = ({
                       </div>
                     </div>
 
+                    <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-slate-700">
+                          Certificate revision history
+                        </span>
+                        {sub.crRemarks && (
+                          <span className="text-[10px] font-semibold text-amber-700">
+                            Corrected after CR feedback
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {Array.from(new Set(sub.fileDriveIdHistory || [])).map((driveId, versionIndex) => {
+                          const isCurrent = driveId === sub.currentFileDriveId;
+                          return (
+                            <a
+                              key={`${driveId}-${versionIndex}`}
+                              href={getDriveFileWebUrl(driveId)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition-colors ${
+                                isCurrent
+                                  ? 'border-indigo-300 bg-indigo-600 text-white hover:bg-indigo-700'
+                                  : 'border-slate-200 bg-white text-slate-700 hover:border-indigo-300'
+                              }`}
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              Version {versionIndex + 1}{isCurrent ? ' — Current corrected file' : ' — Previous file'}
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                       <button
                         onClick={() => setActionSubModal({ sub, type: 'reject' })}
@@ -432,7 +455,7 @@ export const TGMDashboard: React.FC<TGMDashboardProps> = ({
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 min-[481px]:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               { label: 'My Students', value: ownStudentsList.length, color: 'text-slate-900' },
               { label: 'Total Approved Pts', value: submissions.filter(s => s.status === 'approved').reduce((a, b) => a + b.calculatedPoints, 0), color: 'text-emerald-600' },
@@ -611,7 +634,7 @@ export const TGMDashboard: React.FC<TGMDashboardProps> = ({
       {/* Student Certificate Log Modal */}
       {selectedStudentForModal && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[85vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[calc(100dvh-1.5rem)] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-bold text-slate-900 text-lg">{selectedStudentForModal.name}'s Activity Submissions</h3>
@@ -685,7 +708,7 @@ export const TGMDashboard: React.FC<TGMDashboardProps> = ({
       {/* TGM Action Modal */}
       {actionSubModal && (
         <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4">
             <h3 className="font-bold text-slate-900 text-base">
               {actionSubModal.type === 'approve' && 'Approve Entry & Credit Live Points'}
               {actionSubModal.type === 'reject' && 'Reject Certificate Submission'}

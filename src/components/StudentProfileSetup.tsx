@@ -125,8 +125,8 @@ export const StudentProfileSetup: React.FC<StudentProfileSetupProps> = ({
 
   return (
     <div className="min-h-[85vh] flex items-center justify-center p-4">
-      <div className="max-w-lg w-full bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
-        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 text-white">
+      <div className="max-w-lg w-full bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-4 sm:px-6 py-5 text-white">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center">
               <GraduationCap className="w-5 h-5" />
@@ -142,7 +142,7 @@ export const StudentProfileSetup: React.FC<StudentProfileSetupProps> = ({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4">
           {submitError && (
             <div className="bg-rose-50 text-rose-700 p-3 rounded-xl border border-rose-100 text-xs font-medium flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -207,7 +207,7 @@ export const StudentProfileSetup: React.FC<StudentProfileSetupProps> = ({
                 <Info className="w-3.5 h-3.5" />
                 Detected Student Information
               </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
+              <div className="grid grid-cols-1 min-[481px]:grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
                 <div>
                   <span className="text-slate-500">Academic Year</span>
                   <p className="font-semibold text-slate-800">

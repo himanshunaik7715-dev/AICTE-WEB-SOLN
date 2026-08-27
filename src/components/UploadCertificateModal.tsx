@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CertificateSubmission, Semester } from '../types';
 import { SEMESTER_TARGETS, AICTE_CATEGORIES } from '../constants/aicteData';
 import {
+  extractDriveFileId,
   getDriveFilePreviewUrl,
   getDriveFileWebUrl,
 } from '../services/driveService';
@@ -75,9 +76,9 @@ export const UploadCertificateModal: React.FC<UploadCertificateModalProps> = ({
       return;
     }
 
-    const finalDriveId = driveFileId.trim();
+    const finalDriveId = extractDriveFileId(driveFileId);
     const history = existingSubmission
-      ? [...existingSubmission.fileDriveIdHistory, finalDriveId]
+      ? Array.from(new Set([...(existingSubmission.fileDriveIdHistory || []), finalDriveId]))
       : [finalDriveId];
 
     onSubmit({
@@ -106,9 +107,9 @@ export const UploadCertificateModal: React.FC<UploadCertificateModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-      <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 my-auto max-h-[92vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl sm:rounded-3xl max-w-xl w-full p-4 sm:p-7 shadow-2xl border border-slate-200 space-y-5 my-auto max-h-[calc(100dvh-1.5rem)] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
           <div className="flex items-center gap-2.5">
             <div className="bg-indigo-50 text-indigo-600 p-2 rounded-xl border border-indigo-100">
               <Upload className="w-5 h-5" />
@@ -118,7 +119,7 @@ export const UploadCertificateModal: React.FC<UploadCertificateModalProps> = ({
                 {existingSubmission ? 'Re-upload Certificate' : 'Upload Activity Certificate'}
               </h3>
               <p className="text-xs text-slate-500">
-                Select Academic Semester and AICTE Activity Category (1-15)
+                Select Academic Semester and AICTE Activity Category (1-16)
               </p>
             </div>
           </div>
@@ -150,7 +151,7 @@ export const UploadCertificateModal: React.FC<UploadCertificateModalProps> = ({
             <label className="block text-xs font-bold text-slate-800 mb-1">
               Select Academic Semester *
             </label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 min-[481px]:grid-cols-4 gap-2">
               {SEMESTER_TARGETS.map((st) => {
                 const isSelected = semester === st.semester;
                 return (
@@ -226,7 +227,7 @@ export const UploadCertificateModal: React.FC<UploadCertificateModalProps> = ({
           </div>
 
           {/* Hours & Points Calculator */}
-          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 grid grid-cols-2 gap-3 items-center">
+          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 grid grid-cols-1 min-[481px]:grid-cols-2 gap-3 items-center">
             <div>
               <label className="block text-xs font-bold text-slate-800 mb-1">
                 Hours Spent *
@@ -284,7 +285,7 @@ export const UploadCertificateModal: React.FC<UploadCertificateModalProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. https://drive.google.com/file/d/1A2b3C4d5E.../view"
+                  placeholder="Paste a Google Drive file link or file ID"
                   value={driveFileId}
                   onChange={(e) => setDriveFileId(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl pl-9 pr-3.5 py-2.5 text-xs sm:text-sm font-mono text-slate-900 bg-white placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:outline-none shadow-2xs"
@@ -339,7 +340,7 @@ export const UploadCertificateModal: React.FC<UploadCertificateModalProps> = ({
               type="submit"
               className="px-5 py-2.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xs transition-all"
             >
-              {existingSubmission ? 'Submit Revision' : 'Upload to Portfolio'}
+              {existingSubmission ? 'Save Revision to Portfolio' : 'Save to Portfolio'}
             </button>
           </div>
         </form>

@@ -38,12 +38,12 @@ export interface UserProfile {
   tgmId?: string;
   crName?: string;
   crId?: string; // ID of the assigned CR user (from users.id)
+  tgGroup?: string;
   driveRootFolderId?: string;
   tgmApprovalStatus?: 'pending' | 'approved' | 'rejected';
   approvedBy?: string;
   approvedAt?: string;
   customRole?: string; // For CR/Club Heads: e.g. "NSS Head", "Cultural Secretary", "Tech Club President"
-  password?: string; // Password for manual credential login (CR / Club Heads)
 }
 
 export interface AICTECategory {
@@ -79,7 +79,7 @@ export interface CertificateSubmission {
   semester: Semester;
   activityName: string;
   conductedBy: string;
-  activityCategoryNo: number; // 1-15
+  activityCategoryNo: number; // 1-16
   shortDescription: string;
   hoursSpent: number;
   calculatedPoints: number;
@@ -95,6 +95,7 @@ export interface CertificateSubmission {
   tgmVerifiedAt?: string;
   tgmVerifiedBy?: string;
   tgmRemarks?: string;
+  resubmissionRequestedBy?: 'cr' | 'tgm' | null;
   status: SubmissionStatus;
   createdAt: string;
   updatedAt: string;

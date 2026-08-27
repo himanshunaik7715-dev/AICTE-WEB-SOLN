@@ -4,124 +4,11 @@ import {
   AdminUser,
   UserProfile,
 } from '../types';
-import { sendTgmApprovalNotification } from './emailClient';
-import {
-  INITIAL_SUBMISSIONS,
-  INITIAL_ADMINS,
-  DEFAULT_STUDENT,
-  STUDENT_VIKRAM,
-  STUDENT_SNEHA,
-  STUDENT_AARAV,
-  SUPERADMIN_PROFILE,
-  CR_A1,
-  CR_A2,
-  CR_B1,
-  CR_B2,
-  CR_2024_1,
-  CR_2024_2,
-} from '../constants/aicteData';
-
-// Local storage key constants for seamless offline/fallback state
-const LS_SUBMISSIONS_KEY = 'tcet_aicte_submissions_v2';
-const LS_USERS_KEY = 'tcet_aicte_users_v2';
-const LS_ADMINS_KEY = 'tcet_aicte_admins_v2';
-
-// Seed Profiles for Students, CRs, Teachers/TGMs, and Super Admin
-export const SEEDED_PROFILES: UserProfile[] = [
-  SUPERADMIN_PROFILE,
-  DEFAULT_STUDENT,
-  STUDENT_VIKRAM,
-  STUDENT_SNEHA,
-  STUDENT_AARAV,
-  {
-    id: 'STU-2023011988',
-    name: 'Priya Singh',
-    email: '2023011988@tcetmumbai.in',
-    role: 'student',
-    rollNo: '5',
-    erpNo: '2023011988',
-    department: 'Internet of Things (IoT)',
-    division: 'A',
-    academicBatch: '2023-2027',
-    driveRootFolderId: 'drive_folder_priya_singh_2023',
-  },
-  {
-    id: 'STU-2023012001',
-    name: 'Amit Patel',
-    email: '2023012001@tcetmumbai.in',
-    role: 'student',
-    rollNo: '6',
-    erpNo: '2023012001',
-    department: 'Internet of Things (IoT)',
-    division: 'A',
-    academicBatch: '2023-2027',
-    driveRootFolderId: 'drive_folder_amit_patel_2023',
-  },
-  // CR Accounts — Division A
-  CR_A1,
-  CR_A2,
-  // CR Accounts — Division B
-  CR_B1,
-  CR_B2,
-  CR_2024_1,
-  CR_2024_2,
-  // Legacy CR account (Division A)
-  {
-    id: 'CR-TCET-2026',
-    name: 'Class Representative (CR)',
-    email: 'cr@tcetmumbai.in',
-    password: '2026@tcetiotcr',
-    role: 'cr',
-    rollNo: '7',
-    erpNo: '2023011100',
-    department: 'Internet of Things (IoT)',
-    division: 'A',
-    academicBatch: '2023-2027',
-    crName: 'Class Representative (CR)',
-    tgmApprovalStatus: 'approved',
-    driveRootFolderId: 'drive_folder_cr_tcet',
-  },
-  {
-    id: 'TGM-1001',
-    name: 'Prof. S. K. Mehta (Senior TGM)',
-    email: 'skmehta@tcetmumbai.in',
-    role: 'admin',
-    rollNo: '101',
-    erpNo: 'ERP-TGM-101',
-    department: 'Internet of Things (IoT)',
-    division: 'All IoT Divisions',
-    academicBatch: 'Faculty Guide',
-    tgmApprovalStatus: 'approved',
-  },
-  {
-    id: 'TGM-1002',
-    name: 'Dr. Rajesh Patel (AICTE Co-ordinator)',
-    email: 'aicte_coordinator@tcetmumbai.in',
-    role: 'admin',
-    rollNo: '102',
-    erpNo: 'ERP-TGM-102',
-    department: 'Internet of Things (IoT)',
-    division: 'Institutional AICTE Head',
-    academicBatch: 'Faculty Guide',
-    tgmApprovalStatus: 'approved',
-  },
-];
-
-function loadUsersFromLocalStorage(): UserProfile[] {
-  const users = loadFromLocalStorage<UserProfile[]>(LS_USERS_KEY, SEEDED_PROFILES);
-  // Ensure all seeded CR accounts exist in the local cache
-  for (const seeded of SEEDED_PROFILES) {
-    if (seeded.role === 'cr' && !users.some((u) => u.id === seeded.id)) {
-      users.push(seeded);
-    }
-  }
-  return users;
-}
-
-// In-Memory state caches
-let cachedSubmissions: CertificateSubmission[] = loadFromLocalStorage(LS_SUBMISSIONS_KEY, INITIAL_SUBMISSIONS);
-let cachedUsers: UserProfile[] = loadUsersFromLocalStorage();
-let cachedAdmins: AdminUser[] = loadFromLocalStorage(LS_ADMINS_KEY, INITIAL_ADMINS);
+// Session-scoped caches. Sensitive records are deliberately not persisted in
+// browser storage and production data is never populated from frontend fixtures.
+let cachedSubmissions: CertificateSubmission[] = [];
+let cachedUsers: UserProfile[] = [];
+let cachedAdmins: AdminUser[] = [];
 
 
 // Listeners
@@ -129,78 +16,16 @@ const submissionListeners: Array<(subs: CertificateSubmission[]) => void> = [];
 const userListeners: Array<(users: UserProfile[]) => void> = [];
 const adminListeners: Array<(admins: AdminUser[]) => void> = [];
 
-function loadFromLocalStorage<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {
-    console.warn(`Error reading ${key} from localStorage:`, e);
-  }
-  return fallback;
-}
-
-function saveToLocalStorage<T>(key: string, value: T) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (e) {
-    console.warn(`Error saving ${key} to localStorage:`, e);
-  }
-}
-
 function notifySubmissions() {
-  saveToLocalStorage(LS_SUBMISSIONS_KEY, cachedSubmissions);
   submissionListeners.forEach((fn) => fn([...cachedSubmissions]));
 }
 
 function notifyUsers() {
-  saveToLocalStorage(LS_USERS_KEY, cachedUsers);
   userListeners.forEach((fn) => fn([...cachedUsers]));
 }
 
 function notifyAdmins() {
-  saveToLocalStorage(LS_ADMINS_KEY, cachedAdmins);
   adminListeners.forEach((fn) => fn([...cachedAdmins]));
-}
-
-/**
- * Seed initial data to Supabase database if configured
- */
-export async function seedInitialDatabase(force: boolean = false): Promise<void> {
-  if (!isSupabaseConfigured) {
-    console.log('Supabase credentials not set. Operating with persistent local storage engine.');
-    return;
-  }
-
-  try {
-    // Check if table records exist in Supabase
-    const { data: existingSubmissions, error: errSub } = await supabase.from('submissions').select('id');
-    const { data: existingUsers, error: errUsers } = await supabase.from('users').select('id');
-    const { data: existingAdmins, error: errAdmins } = await supabase.from('admins').select('id');
-
-    if (errSub || errUsers || errAdmins) {
-      console.warn('Supabase tables query issue (check schema/columns):', { errSub, errUsers, errAdmins });
-    }
-
-    if (force || !existingUsers || existingUsers.length === 0) {
-      const usersToSeed = cachedUsers.map(({ password, ...user }) => user as any);
-      const { error } = await supabase.from('users').upsert(usersToSeed);
-      if (error) console.error('Users seeding error:', error.message);
-    }
-
-    if (force || !existingAdmins || existingAdmins.length === 0) {
-      const { error } = await supabase.from('admins').upsert(cachedAdmins);
-      if (error) console.error('Admins seeding error:', error.message);
-    }
-
-    if (force || !existingSubmissions || existingSubmissions.length === 0) {
-      const { error } = await supabase.from('submissions').upsert(cachedSubmissions);
-      if (error) console.error('Submissions seeding error:', error.message);
-    }
-
-    console.log('Supabase database seeding attempt finished.');
-  } catch (error) {
-    console.error('Error seeding Supabase database:', error);
-  }
 }
 
 /**
@@ -281,11 +106,24 @@ export function subscribeToSubmissions(
 /**
  * Subscribe to Whitelisted Admins
  */
-export function subscribeToAdmins(callback: (admins: AdminUser[]) => void) {
+export function subscribeToAdmins(
+  role: string | null,
+  callback: (admins: AdminUser[]) => void
+) {
   adminListeners.push(callback);
   callback([...cachedAdmins]);
 
   if (isSupabaseConfigured) {
+    // The production database intentionally denies the anon role access to the
+    // faculty whitelist. Do not issue this query until session restoration has
+    // resolved an authenticated application role.
+    if (role === 'auth' || !role) {
+      return () => {
+        const idx = adminListeners.indexOf(callback);
+        if (idx !== -1) adminListeners.splice(idx, 1);
+      };
+    }
+
     supabase
       .from('admins')
       .select('*')
@@ -293,6 +131,8 @@ export function subscribeToAdmins(callback: (admins: AdminUser[]) => void) {
         if (!error && data && data.length > 0) {
           cachedAdmins = data as AdminUser[];
           notifyAdmins();
+        } else if (error) {
+          console.warn('Supabase admins select error:', error.message);
         }
       });
 
@@ -499,10 +339,7 @@ export async function saveUserProfileToDb(
   notifyUsers();
 
   if (isSupabaseConfigured) {
-    // Strip fields that don't exist in the Supabase `users` table schema
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: _pw, ...dbProfile } = profile as UserProfile & { password?: string };
-    const { error } = await supabase.from('users').upsert(dbProfile);
+    const { error } = await supabase.from('users').upsert(profile);
     if (error) {
       console.error('Supabase saveUserProfileToDb error:', error.message);
       if (options?.throwOnError) {
@@ -551,7 +388,7 @@ export async function approveTgmUserInDb(
     (u) => u.id === userIdOrEmail || u.email.trim().toLowerCase() === normKey
   );
 
-  // Fallback search via DB or localStorage
+  // Fallback search via the database.
   if (userIdx === -1) {
     const dbProfile = await getUserProfileByEmail(normKey);
     if (dbProfile) {
@@ -632,15 +469,6 @@ export async function approveTgmUserInDb(
     }
   }
 
-  // Dispatch Approval Email via Resend Queue
-  const tgmEmail = matchedUser?.email || (matchedAdmin ? matchedAdmin.email : userIdOrEmail);
-  const tgmName = matchedUser?.name || (matchedAdmin ? matchedAdmin.name : 'Faculty / Club Member');
-  sendTgmApprovalNotification({
-    tgmEmail,
-    tgmName,
-    status: 'approved',
-    approvedBy,
-  }).catch((e) => console.warn('Approval email send notice:', e));
 }
 
 /**
@@ -681,24 +509,15 @@ export async function rejectTgmUserInDb(userIdOrEmail: string): Promise<void> {
     }
   }
 
-  const matchedUser = userIdx !== -1 ? cachedUsers[userIdx] : null;
-  const tgmEmail = matchedUser?.email || (adminIdx !== -1 ? cachedAdmins[adminIdx].email : userIdOrEmail);
-  const tgmName = matchedUser?.name || (adminIdx !== -1 ? cachedAdmins[adminIdx].name : 'Faculty / Club Member');
-  sendTgmApprovalNotification({
-    tgmEmail,
-    tgmName,
-    status: 'rejected',
-    approvedBy: 'Super Admin Office',
-  }).catch((e) => console.warn('Rejection email send notice:', e));
 }
 
 /**
  * Clear memory caches when a user logs out to prevent data leakage across sessions
  */
 export function clearDbCaches(): void {
-  cachedSubmissions = INITIAL_SUBMISSIONS;
-  cachedUsers = loadUsersFromLocalStorage();
-  cachedAdmins = INITIAL_ADMINS;
+  cachedSubmissions = [];
+  cachedUsers = [];
+  cachedAdmins = [];
   
   notifySubmissions();
   notifyUsers();

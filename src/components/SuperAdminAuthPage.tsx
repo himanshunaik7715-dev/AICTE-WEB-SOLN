@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
+import { loginWithManualCredentials, logoutUser } from '../services/authService';
 import {
   Crown,
   ShieldCheck,
@@ -12,24 +13,6 @@ import {
   EyeOff,
   LogIn,
 } from 'lucide-react';
-
-// ── Hardcoded Super Admin credentials ──────────────────────────────────────
-const SUPER_ADMIN_EMAIL = 'admin@tcetmumbai.in';
-const SUPER_ADMIN_PASSWORD = '2026@tcetadmin';
-
-const SUPER_ADMIN_PROFILE: UserProfile = {
-  id: 'SUPERADMIN-TCET-2026',
-  name: 'TCET Super Admin',
-  email: SUPER_ADMIN_EMAIL,
-  role: 'superadmin',
-  rollNo: 'SA-01',
-  erpNo: 'ERP-SA-001',
-  department: 'Institutional Head Office',
-  division: 'All Departments',
-  academicBatch: 'Principal / Head',
-  tgmApprovalStatus: 'approved',
-};
-// ───────────────────────────────────────────────────────────────────────────
 
 interface SuperAdminAuthPageProps {
   onSelectProfile: (profile: UserProfile) => void;
@@ -59,21 +42,18 @@ export const SuperAdminAuthPage: React.FC<SuperAdminAuthPageProps> = ({
 
     setLoading(true);
 
-    // Simulate a brief network delay for UX realism
-    await new Promise((r) => setTimeout(r, 600));
-
-    const emailMatch = email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-    const passMatch = password === SUPER_ADMIN_PASSWORD;
-
-    if (emailMatch && passMatch) {
+    try {
+      const profile = await loginWithManualCredentials(email, password, 'superadmin');
+      if (profile.role !== 'superadmin' || profile.tgmApprovalStatus !== 'approved') {
+        await logoutUser();
+        throw new Error('This account does not have approved Super Admin access.');
+      }
       setSuccessMsg('Authentication successful. Welcome, Super Admin!');
       setTimeout(() => {
-        onSelectProfile(SUPER_ADMIN_PROFILE);
+        onSelectProfile(profile);
       }, 700);
-    } else {
-      setErrorMsg(
-        'Invalid credentials. Access is restricted to the authorised Super Admin account only.'
-      );
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Authentication failed.');
     }
 
     setLoading(false);
@@ -82,11 +62,11 @@ export const SuperAdminAuthPage: React.FC<SuperAdminAuthPageProps> = ({
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 py-8 relative overflow-hidden">
       {/* Ambient glow */}
-      <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[700px] h-[400px] bg-indigo-700/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-5%] w-[400px] h-[400px] bg-violet-700/8 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[min(700px,100vw)] h-[400px] bg-indigo-700/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-5%] w-[min(400px,90vw)] h-[400px] bg-violet-700/8 blur-[100px] rounded-full pointer-events-none" />
 
       {/* Return Button */}
-      <div className="w-full max-w-md mb-5 flex items-center justify-between">
+      <div className="w-full max-w-md mb-5 flex flex-col min-[400px]:flex-row min-[400px]:items-center justify-between gap-3">
         <button
           onClick={onReturnToStandardAuth}
           className="text-xs font-bold text-slate-400 hover:text-white flex items-center gap-1.5 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 px-3.5 py-2 rounded-xl transition-all cursor-pointer"
@@ -103,7 +83,7 @@ export const SuperAdminAuthPage: React.FC<SuperAdminAuthPageProps> = ({
       {/* Card */}
       <div className="w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-md">
         {/* Header */}
-        <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 p-7 text-center border-b border-slate-800 relative">
+        <div className="bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 p-5 sm:p-7 text-center border-b border-slate-800 relative">
           {/* Crown icon */}
           <div className="w-16 h-16 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/30 mb-4 border border-indigo-400/20">
             <Crown className="w-8 h-8 text-amber-300" />
@@ -119,7 +99,7 @@ export const SuperAdminAuthPage: React.FC<SuperAdminAuthPageProps> = ({
         </div>
 
         {/* Body */}
-        <div className="p-7 space-y-5">
+        <div className="p-5 sm:p-7 space-y-5">
           {/* Alerts */}
           {errorMsg && (
             <div className="bg-rose-950/80 border border-rose-800 text-rose-200 text-xs p-3.5 rounded-xl flex items-start gap-2.5">

@@ -28,6 +28,7 @@ CAT-12: Skill Development & Entrepreneurship
 CAT-13: Women Empowerment & Social Equity
 CAT-14: Student Body & Club Leadership
 CAT-15: Industry Visits & Community Research
+CAT-16: Other Approved Activity
 Use the code only (e.g. "CAT-06"), not the full name.
 
 title — a short, clean title for the certificate/achievement (max 8 words), derived from the document content, not the filename.

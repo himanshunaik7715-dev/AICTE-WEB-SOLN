@@ -1,9 +1,7 @@
 import { User } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { UserProfile, AdminUser } from '../types';
-import { SEEDED_PROFILES, saveUserProfileToDb, addAdminToDb, getUserProfileByEmail, clearDbCaches } from './dbService';
-import { sendWelcomeEmail } from './emailClient';
-import { jwtDecode } from 'jwt-decode';
+import { saveUserProfileToDb, addAdminToDb, getUserProfileByEmail, clearDbCaches } from './dbService';
 import { parseStudentUID } from '../utils/parseStudentUID';
 import { isStudentProfileComplete } from '../utils/studentProfile';
 
@@ -17,44 +15,33 @@ export type GoogleLoginResult =
   | { profileNeeded: false; profile: UserProfile }
   | { profileNeeded: true; email: string; name: string; existingProfile?: UserProfile };
 
-/**
- * Check if a registered account exists in Supabase Auth (auth.users)
- */
-export async function checkUserExistsInAuth(email: string): Promise<boolean> {
-  if (!email || !email.trim()) return false;
-  try {
-    const res = await fetch('/api/check-user-exists', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: email.trim().toLowerCase() }),
-    });
-    if (!res.ok) {
-      return false;
-    }
-    const data = await res.json();
-    return Boolean(data.exists);
-  } catch (err) {
-    console.warn('Error calling /api/check-user-exists:', err);
-    return false;
-  }
-}
+const ALLOWED_EMAIL_DOMAIN = '@tcetmumbai.in';
 
 /**
  * Sign in using Google OAuth directly via @react-oauth/google (bypassing Supabase GoTrue)
  */
 export async function loginWithGoogle(credential: string): Promise<GoogleLoginResult> {
-  const decoded: any = jwtDecode(credential);
-  
-  if (!decoded || !decoded.email) {
-    throw new Error('Invalid Google credential token received.');
+  if (!isSupabaseConfigured) {
+    throw new Error('Authentication is not configured. Add the Supabase environment variables.');
+  }
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: 'google',
+    token: credential,
+  });
+  if (error || !data.user?.email) {
+    if (error?.message?.toLowerCase().includes('provider') && error.message.toLowerCase().includes('not enabled')) {
+      throw new Error('Google sign-in is not enabled in Supabase. Ask the administrator to enable the Google provider.');
+    }
+    throw new Error(error?.message || 'Google authentication failed.');
   }
 
-  const email = decoded.email.trim().toLowerCase();
+  const email = data.user.email.trim().toLowerCase();
   
-  if (!email.endsWith('@tcetmumbai.in') && email !== 'superadmin') {
-    throw new Error('Access Denied: Only @tcetmumbai.in email addresses are allowed.');
+  if (!email.endsWith(ALLOWED_EMAIL_DOMAIN)) {
+    await supabase.auth.signOut();
+    throw new Error('Access denied: only @tcetmumbai.in Google Workspace accounts are allowed.');
   }
-  const existing = await getUserProfileByEmail(email) || SEEDED_PROFILES.find((p) => p.email.toLowerCase() === email.toLowerCase());
+  const existing = await getUserProfileByEmail(email);
 
   if (existing) {
     if (existing.role === 'student' && !isStudentProfileComplete(existing)) {
@@ -68,11 +55,25 @@ export async function loginWithGoogle(credential: string): Promise<GoogleLoginRe
     return { profileNeeded: false, profile: existing };
   }
 
+  const accessToken = data.session?.access_token;
+  if (accessToken) {
+    const response = await fetch('/api/auth/bootstrap-profile', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (response.ok) {
+      const bootstrap = await response.json();
+      if (bootstrap?.profile) {
+        return { profileNeeded: false, profile: bootstrap.profile as UserProfile };
+      }
+    }
+  }
+
   // If no existing profile, return a signal that onboarding is needed
   return { 
     profileNeeded: true, 
     email: email, 
-    name: decoded.name || email.split('@')[0] 
+    name: String(data.user.user_metadata?.full_name || data.user.user_metadata?.name || email.split('@')[0])
   };
 }
 
@@ -101,7 +102,7 @@ export async function completeStudentProfile(
 
   const profile: UserProfile = {
     ...(existingProfile || {}),
-    id: existingProfile?.id || 'STU-GOOGLE-' + Date.now(),
+    id: existingProfile?.id || (await supabase.auth.getUser()).data.user?.id || '',
     name: name.trim(),
     email: email.trim().toLowerCase(),
     role: 'student',
@@ -129,10 +130,6 @@ export async function completeStudentProfile(
     throw new Error('Profile was saved but is still incomplete. Please try again.');
   }
 
-  sendWelcomeEmail({ email: saved.email, name: saved.name, role: 'student' }).catch(
-    (err) => console.warn('Notice: Welcome email send background trigger:', err)
-  );
-
   return saved;
 }
 
@@ -144,13 +141,18 @@ export async function completeGoogleSignUp(
   name: string,
   profileData: Omit<UserProfile, 'id' | 'email' | 'name' | 'tgmApprovalStatus'>
 ): Promise<UserProfile> {
-  const isSeedSuper = email === 'superadmin@tcetmumbai.in' || email === 'superadmin';
-  const isSuper = isSeedSuper || profileData.role === 'superadmin';
-  const role = isSuper ? 'superadmin' : profileData.role;
+  if (!email.toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN)) {
+    throw new Error('Access denied: only @tcetmumbai.in accounts are allowed.');
+  }
+  const role = profileData.role;
 
-  const requiresApproval = (role === 'admin' || role === 'cr') || (role === 'superadmin' && !isSeedSuper);
+  const requiresApproval = role === 'admin' || role === 'cr' || role === 'superadmin';
   
-  const uid = 'STU-GOOGLE-' + Date.now();
+  const { data: authData } = await supabase.auth.getUser();
+  if (!authData.user || authData.user.email?.toLowerCase() !== email.toLowerCase()) {
+    throw new Error('Your authenticated session could not be verified. Please sign in again.');
+  }
+  const uid = authData.user.id;
 
   const newProfile: UserProfile = {
     ...profileData,
@@ -165,13 +167,6 @@ export async function completeGoogleSignUp(
   };
 
   await saveUserProfileToDb(newProfile);
-
-  // Send welcome email asynchronously via server queue
-  sendWelcomeEmail({
-    email,
-    name,
-    role,
-  }).catch((err) => console.warn('Notice: Welcome email send background trigger:', err));
 
   // If user signed up as TGM (admin), CR, or Super Admin, register pending request in Admin whitelist decision queue
   if (requiresApproval) {
@@ -214,26 +209,12 @@ export async function logoutUser(): Promise<void> {
 }
 
 /**
- * Helper to match an email or ID to one of our seeded profiles
- */
-export function getSeededProfileByEmailOrRole(
-  emailOrRole: string
-): UserProfile | undefined {
-  const lower = emailOrRole.toLowerCase();
-  return SEEDED_PROFILES.find(
-    (p) =>
-      p.email.toLowerCase() === lower ||
-      p.role.toLowerCase() === lower ||
-      p.id.toLowerCase() === lower
-  );
-}
-
-/**
  * Manual credential login for CR / Club Head accounts
  */
 export async function loginWithManualCredentials(
   emailInput: string,
   passwordInput: string,
+  allowedRole: 'cr' | 'superadmin',
   allUsers: UserProfile[] = []
 ): Promise<UserProfile> {
   const email = emailInput.trim().toLowerCase();
@@ -243,20 +224,26 @@ export async function loginWithManualCredentials(
     throw new Error('Please enter both email and password.');
   }
 
-  // Find profile in live state, DB, or SEEDED_PROFILES
-  let matchedUser = allUsers.find((u) => u.email.toLowerCase() === email);
-  if (!matchedUser) {
-    matchedUser = (await getUserProfileByEmail(email)) || SEEDED_PROFILES.find((p) => p.email.toLowerCase() === email);
+  if (!isSupabaseConfigured) {
+    throw new Error('Authentication is not configured. Add the Supabase environment variables.');
   }
-
-
-  if (!matchedUser) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data.user) {
     throw new Error('Invalid email or password.');
   }
+  const matchedUser = allUsers.find((u) => u.id === data.user.id) || await getUserProfileByEmail(email);
+  if (!matchedUser || matchedUser.id !== data.user.id) {
+    await supabase.auth.signOut();
+    throw new Error('No application profile is linked to this account.');
+  }
 
-  // Password verification
-  if (matchedUser.password && matchedUser.password !== password) {
-    throw new Error('Invalid email or password.');
+  if (matchedUser.role !== allowedRole) {
+    await supabase.auth.signOut();
+    throw new Error(
+      allowedRole === 'cr'
+        ? 'Password sign-in is restricted to CR / Club Head accounts. TGMs must use their institutional Google account.'
+        : 'This account does not have Super Admin access.'
+    );
   }
 
   // Approval status check
@@ -307,7 +294,20 @@ export async function registerClubHeadAccount(params: {
     throw new Error('An account with this email address already exists.');
   }
 
-  const uid = 'CLUB-' + Date.now();
+  if (!isSupabaseConfigured) {
+    throw new Error('Authentication is not configured. Add the Supabase environment variables.');
+  }
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email: cleanEmail,
+    password,
+  });
+  if (authError || !authData.user) {
+    throw new Error(authError?.message || 'Unable to create the account.');
+  }
+  if (!authData.session) {
+    throw new Error('Check your email to confirm the account, then sign in to finish registration.');
+  }
+  const uid = authData.user.id;
   const formattedClubTitle = clubName.trim().endsWith('Head') || clubName.trim().endsWith('Leader')
     ? clubName.trim()
     : `${clubName.trim()} Head`;
@@ -316,7 +316,6 @@ export async function registerClubHeadAccount(params: {
     id: uid,
     name: formattedClubTitle,
     email: cleanEmail,
-    password,
     role: 'cr',
     customRole: formattedClubTitle,
     rollNo: rollNo?.trim() || 'CH-01',
@@ -343,13 +342,6 @@ export async function registerClubHeadAccount(params: {
     approvalStatus: 'pending',
   };
   await addAdminToDb(newAdmin);
-
-  // Dispatch background notification email
-  sendWelcomeEmail({
-    email: cleanEmail,
-    name: formattedClubTitle,
-    role: 'cr',
-  }).catch((err) => console.warn('Welcome email trigger notice:', err));
 
   return newProfile;
 }

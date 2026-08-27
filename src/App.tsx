@@ -10,13 +10,9 @@ import {
   SubmissionStatus,
 } from "./types";
 
-import {
-  DEFAULT_STUDENT,
-  AICTE_CATEGORIES,
-} from "./constants/aicteData";
+import { AICTE_CATEGORIES } from "./constants/aicteData";
 
 import {
-  seedInitialDatabase,
   subscribeToSubmissions,
   subscribeToAdmins,
   subscribeToUsers,
@@ -31,7 +27,7 @@ import {
 } from "./services/dbService";
 
 import { logoutUser } from "./services/authService";
-import { sendSubmissionStatusNotification } from "./services/emailClient";
+import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { isStudentProfileComplete } from "./utils/studentProfile";
 
 import { Header } from "./components/Header";
@@ -47,16 +43,17 @@ import { AuthModal } from "./components/AuthModal";
 import { AuthPage } from "./components/AuthPage";
 import { SuperAdminAuthPage } from "./components/SuperAdminAuthPage";
 import { RoleSelectionPage } from "./components/RoleSelectionPage";
-import { StorageExplorerModal } from "./components/StorageExplorerModal";
-
-const SESSION_STORAGE_KEY = "tcet_active_session";
+const EMPTY_PROFILE: UserProfile = {
+  id: "", name: "", email: "", role: "student", rollNo: "", erpNo: "",
+  department: "", division: "", academicBatch: "",
+};
 
 export default function App() {
   const [currentRole, setCurrentRole] =
     useState<UserRole | "auth">("auth");
 
   const [activeProfile, setActiveProfile] =
-    useState<UserProfile>(DEFAULT_STUDENT);
+    useState<UserProfile>(EMPTY_PROFILE);
 
   const [selectedEntryRole, setSelectedEntryRole] = useState<
     "student" | "cr" | "admin" | null
@@ -133,17 +130,17 @@ export default function App() {
   useEffect(() => {
     async function restoreSession() {
       try {
-        const savedSession =
-          localStorage.getItem(SESSION_STORAGE_KEY);
-
-        if (!savedSession) {
+        if (!isSupabaseConfigured) {
           setCurrentRole("auth");
           return;
         }
-
-        const parsed: UserProfile = JSON.parse(savedSession);
-
-        if (!parsed?.id || !parsed?.name || !parsed?.role) {
+        const { data, error } = await supabase.auth.getUser();
+        if (error || !data.user?.email) {
+          setCurrentRole("auth");
+          return;
+        }
+        const parsed = await getUserProfileByEmail(data.user.email);
+        if (!parsed || parsed.id !== data.user.id) {
           setCurrentRole("auth");
           return;
         }
@@ -195,17 +192,11 @@ export default function App() {
   const [allUsers, setAllUsers] =
     useState<UserProfile[]>([]);
 
-  const [dbLoading, setDbLoading] =
-    useState(true);
-
   /* -------------------------------------------------------
      MODALS
   ------------------------------------------------------- */
 
   const [isAuthModalOpen, setIsAuthModalOpen] =
-    useState(false);
-
-  const [isStorageExplorerOpen, setIsStorageExplorerOpen] =
     useState(false);
 
   const [isUploadModalOpen, setIsUploadModalOpen] =
@@ -221,22 +212,6 @@ export default function App() {
     useState<CertificateSubmission | null>(null);
 
   /* -------------------------------------------------------
-     DATABASE INITIALIZATION
-  ------------------------------------------------------- */
-
-  useEffect(() => {
-    async function initDb() {
-      setDbLoading(true);
-
-      await seedInitialDatabase(true);
-
-      setDbLoading(false);
-    }
-
-    initDb();
-  }, []);
-
-  /* -------------------------------------------------------
      REAL-TIME DATABASE SUBSCRIPTIONS
   ------------------------------------------------------- */
 
@@ -247,7 +222,7 @@ export default function App() {
       });
 
     const unsubscribeAdmins =
-      subscribeToAdmins((data) => {
+      subscribeToAdmins(currentRole, (data) => {
         setAdmins(data);
       });
 
@@ -289,18 +264,6 @@ export default function App() {
     setCurrentRole(profile.role);
     setStudentOnboarding(null);
 
-    try {
-      localStorage.setItem(
-        SESSION_STORAGE_KEY,
-        JSON.stringify(profile)
-      );
-    } catch (e) {
-      console.error(
-        "Failed to save session:",
-        e
-      );
-    }
-
     saveUserProfileToDb(profile);
   };
 
@@ -311,46 +274,15 @@ export default function App() {
     setActiveProfile(profile);
     setCurrentRole("student");
 
-    try {
-      localStorage.setItem(
-        SESSION_STORAGE_KEY,
-        JSON.stringify(profile)
-      );
-    } catch (e) {
-      console.error("Failed to save session:", e);
-    }
   };
 
   const handleLogout = async () => {
     await logoutUser();
 
-    try {
-      localStorage.removeItem(
-        SESSION_STORAGE_KEY
-      );
-    } catch (e) {
-      console.error(
-        "Failed to clear session:",
-        e
-      );
-    }
-
-    setActiveProfile(DEFAULT_STUDENT);
+    setActiveProfile(EMPTY_PROFILE);
     setCurrentRole("auth");
     setSelectedEntryRole(null);
     setStudentOnboarding(null);
-  };
-
-  /* -------------------------------------------------------
-     RESEED DATABASE
-  ------------------------------------------------------- */
-
-  const handleReseedDb = async () => {
-    setDbLoading(true);
-
-    await seedInitialDatabase(true);
-
-    setDbLoading(false);
   };
 
   /* -------------------------------------------------------
@@ -431,19 +363,54 @@ export default function App() {
     >
   ) => {
     if (editingSubmission) {
+      const isTgmRejected =
+        editingSubmission.status === "rejected" ||
+        (editingSubmission.status === "resubmission_requested" &&
+          editingSubmission.resubmissionRequestedBy === "tgm");
+
+      const requestedBy = isTgmRejected
+        ? null
+        : editingSubmission.resubmissionRequestedBy ||
+          (editingSubmission.tgmRemarks && editingSubmission.isCheckedByCR
+            ? "tgm"
+            : editingSubmission.crRemarks
+            ? "cr"
+            : null);
+
       const updatedSub: CertificateSubmission = {
         ...editingSubmission,
         ...data,
-        isCheckedByCR: false,
+        studentId: activeProfile.id,
+        studentName: activeProfile.name,
+        studentRollNo: activeProfile.rollNo,
+        studentErpNo: activeProfile.erpNo,
+        studentDepartment: activeProfile.department,
+        studentDivision: activeProfile.division,
+        isCheckedByCR:
+          requestedBy === "tgm" ? editingSubmission.isCheckedByCR : false,
         isVerifiedByTGM: false,
-        status: "pending_cr",
-        updatedAt:
-          new Date().toISOString(),
+        // A replacement for a TGM-rejected certificate restarts the same
+        // verification pipeline as every submitted certificate: CR, then TGM.
+        status: isTgmRejected
+          ? "pending_cr"
+          : requestedBy === "tgm"
+          ? "pending_admin"
+          : requestedBy === "cr"
+          ? "pending_cr"
+          : "imported",
+        resubmissionRequestedBy: isTgmRejected
+          ? null
+          : null,
+        crCheckedAt: isTgmRejected ? undefined : editingSubmission.crCheckedAt,
+        crCheckedBy: isTgmRejected ? undefined : editingSubmission.crCheckedBy,
+        crRemarks: isTgmRejected ? undefined : editingSubmission.crRemarks,
+        tgmVerifiedAt: isTgmRejected ? undefined : editingSubmission.tgmVerifiedAt,
+        tgmVerifiedBy: isTgmRejected ? undefined : editingSubmission.tgmVerifiedBy,
+        tgmRemarks: isTgmRejected ? undefined : editingSubmission.tgmRemarks,
+        updatedAt: new Date().toISOString(),
       };
 
-      await saveSubmissionToDb(
-        updatedSub
-      );
+      await saveSubmissionToDb(updatedSub);
     } else {
       const newSub: CertificateSubmission = {
         ...data,
@@ -460,7 +427,7 @@ export default function App() {
           activeProfile.division,
         isCheckedByCR: false,
         isVerifiedByTGM: false,
-        status: "pending_cr",
+        status: "imported",
         createdAt:
           new Date().toISOString(),
         updatedAt:
@@ -487,15 +454,31 @@ export default function App() {
       const existing =
         submissions.find(
           (s) =>
-            s.studentId ===
-              sub.studentId &&
-            s.currentFileDriveId &&
-            sub.currentFileDriveId &&
-            s.currentFileDriveId ===
-              sub.currentFileDriveId
+            s.studentId === sub.studentId &&
+            Boolean(sub.currentFileDriveId) &&
+            (
+              s.currentFileDriveId === sub.currentFileDriveId ||
+              s.fileDriveIdHistory?.includes(sub.currentFileDriveId) ||
+              (
+                (s.status === "resubmission_requested" ||
+                  (s.status === "rejected" &&
+                    s.resubmissionRequestedBy === "tgm")) &&
+                s.fileName.trim().toLowerCase() === sub.fileName.trim().toLowerCase()
+              )
+            )
         );
 
       if (existing) {
+        const mergedFileHistory = Array.from(new Set([
+          ...(existing.fileDriveIdHistory || []),
+          ...(sub.fileDriveIdHistory || []),
+          sub.currentFileDriveId,
+        ].filter(Boolean)));
+        const incomingIsKnownVersion = (existing.fileDriveIdHistory || [])
+          .includes(sub.currentFileDriveId);
+        const nextCurrentFileId = incomingIsKnownVersion
+          ? existing.currentFileDriveId
+          : sub.currentFileDriveId;
         const activeStatuses = [
           "pending_cr",
           "pending_admin",
@@ -504,12 +487,16 @@ export default function App() {
           "resubmission_requested",
         ];
 
-        const keepStatus =
-          activeStatuses.includes(
-            existing.status
-          )
-            ? existing.status
-            : sub.status;
+        // A corrected TGM-rejected file restarts at CR verification, then
+        // follows the normal Stage-1 -> Stage-2 workflow.
+        const isTgmRejectedRefetch =
+          existing.status === "rejected";
+
+        const keepStatus = isTgmRejectedRefetch
+          ? "pending_cr"
+          : activeStatuses.includes(existing.status)
+          ? existing.status
+          : sub.status;
 
         await updateSubmissionInDb(
           existing.id,
@@ -517,6 +504,35 @@ export default function App() {
             ...sub,
             id: existing.id,
             status: keepStatus,
+            resubmissionRequestedBy: isTgmRejectedRefetch
+              ? null
+              : existing.resubmissionRequestedBy,
+            currentFileDriveId: nextCurrentFileId,
+            fileDriveIdHistory: mergedFileHistory,
+            isCheckedByCR: isTgmRejectedRefetch
+              ? false
+              : existing.isCheckedByCR,
+            crCheckedAt: isTgmRejectedRefetch
+              ? undefined
+              : existing.crCheckedAt,
+            crCheckedBy: isTgmRejectedRefetch
+              ? undefined
+              : existing.crCheckedBy,
+            crRemarks: isTgmRejectedRefetch
+              ? undefined
+              : existing.crRemarks,
+            isVerifiedByTGM: isTgmRejectedRefetch
+              ? false
+              : existing.isVerifiedByTGM,
+            tgmVerifiedAt: isTgmRejectedRefetch
+              ? undefined
+              : existing.tgmVerifiedAt,
+            tgmVerifiedBy: isTgmRejectedRefetch
+              ? undefined
+              : existing.tgmVerifiedBy,
+            tgmRemarks: isTgmRejectedRefetch
+              ? undefined
+              : existing.tgmRemarks,
             createdAt:
               existing.createdAt,
             updatedAt:
@@ -567,6 +583,9 @@ export default function App() {
       if (!sub) return;
 
       try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) throw new Error('Authentication required');
         const res = await fetch(
           "/api/gemini/classify-certificate",
           {
@@ -574,6 +593,7 @@ export default function App() {
             headers: {
               "Content-Type":
                 "application/json",
+              Authorization: `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
               fileName:
@@ -691,48 +711,13 @@ export default function App() {
           status: "pending_admin",
         }
       );
-
-      const sub =
-        submissions.find(
-          (s) => s.id === id
-        );
-
-      if (sub) {
-        const studentUser =
-          allUsers.find(
-            (u) =>
-              u.id ===
-                sub.studentId ||
-              u.erpNo ===
-                sub.studentErpNo
-          );
-
-        const studentEmail =
-          studentUser?.email ||
-          `${
-            sub.studentErpNo ||
-            "student"
-          }@tcetmumbai.in`;
-
-        sendSubmissionStatusNotification({
-          studentEmail,
-          studentName:
-            sub.studentName,
-          activityName:
-            sub.activityName,
-          points:
-            sub.calculatedPoints,
-          status: "pending_admin",
-          updatedBy: `${activeProfile.name} (Class Representative)`,
-          submissionId: sub.id,
-        }).catch((e) =>
-          console.warn(
-            "Notification send notice:",
-            e
-          )
-        );
-      }
     };
+
+  /* -------------------------------------------------------
+     STUDENT EXPLICIT "APPLY FOR CR" ACTION
+     (Workflow: re-fetched/re-uploaded files are explicitly sent to
+     Stage-1 by the student from the semester folder view.)
+  ------------------------------------------------------- */
 
   /* -------------------------------------------------------
      CR RESUBMISSION
@@ -747,53 +732,11 @@ export default function App() {
         id,
         {
           crRemarks: remarks,
+          resubmissionRequestedBy: "cr",
           status:
             "resubmission_requested",
         }
       );
-
-      const sub =
-        submissions.find(
-          (s) => s.id === id
-        );
-
-      if (sub) {
-        const studentUser =
-          allUsers.find(
-            (u) =>
-              u.id ===
-                sub.studentId ||
-              u.erpNo ===
-                sub.studentErpNo
-          );
-
-        const studentEmail =
-          studentUser?.email ||
-          `${
-            sub.studentErpNo ||
-            "student"
-          }@tcetmumbai.in`;
-
-        sendSubmissionStatusNotification({
-          studentEmail,
-          studentName:
-            sub.studentName,
-          activityName:
-            sub.activityName,
-          points:
-            sub.calculatedPoints,
-          status:
-            "resubmission_requested",
-          remarks,
-          updatedBy: `${activeProfile.name} (Class Representative)`,
-          submissionId: sub.id,
-        }).catch((e) =>
-          console.warn(
-            "Notification send notice:",
-            e
-          )
-        );
-      }
     };
 
   /* -------------------------------------------------------
@@ -822,49 +765,6 @@ export default function App() {
         }
       );
 
-      const sub =
-        submissions.find(
-          (s) => s.id === id
-        );
-
-      if (sub) {
-        const studentUser =
-          allUsers.find(
-            (u) =>
-              u.id ===
-                sub.studentId ||
-              u.erpNo ===
-                sub.studentErpNo
-          );
-
-        const studentEmail =
-          studentUser?.email ||
-          `${
-            sub.studentErpNo ||
-            "student"
-          }@tcetmumbai.in`;
-
-        sendSubmissionStatusNotification({
-          studentEmail,
-          studentName:
-            sub.studentName,
-          activityName:
-            sub.activityName,
-          points:
-            sub.calculatedPoints,
-          status: "approved",
-          remarks:
-            finalRemarks,
-          updatedBy: `${activeProfile.name} (TGM)`,
-          submissionId: sub.id,
-        }).catch((e) =>
-          console.warn(
-            "Notification send notice:",
-            e
-          )
-        );
-      }
-
       confetti({
         particleCount: 50,
         spread: 60,
@@ -888,51 +788,10 @@ export default function App() {
         {
           isVerifiedByTGM: false,
           tgmRemarks: remarks,
+          resubmissionRequestedBy: "tgm",
           status: "rejected",
         }
       );
-
-      const sub =
-        submissions.find(
-          (s) => s.id === id
-        );
-
-      if (sub) {
-        const studentUser =
-          allUsers.find(
-            (u) =>
-              u.id ===
-                sub.studentId ||
-              u.erpNo ===
-                sub.studentErpNo
-          );
-
-        const studentEmail =
-          studentUser?.email ||
-          `${
-            sub.studentErpNo ||
-            "student"
-          }@tcetmumbai.in`;
-
-        sendSubmissionStatusNotification({
-          studentEmail,
-          studentName:
-            sub.studentName,
-          activityName:
-            sub.activityName,
-          points:
-            sub.calculatedPoints,
-          status: "rejected",
-          remarks,
-          updatedBy: `${activeProfile.name} (TGM)`,
-          submissionId: sub.id,
-        }).catch((e) =>
-          console.warn(
-            "Notification send notice:",
-            e
-          )
-        );
-      }
     };
 
   /* -------------------------------------------------------
@@ -948,53 +807,11 @@ export default function App() {
         id,
         {
           tgmRemarks: remarks,
+          resubmissionRequestedBy: "tgm",
           status:
             "resubmission_requested",
         }
       );
-
-      const sub =
-        submissions.find(
-          (s) => s.id === id
-        );
-
-      if (sub) {
-        const studentUser =
-          allUsers.find(
-            (u) =>
-              u.id ===
-                sub.studentId ||
-              u.erpNo ===
-                sub.studentErpNo
-          );
-
-        const studentEmail =
-          studentUser?.email ||
-          `${
-            sub.studentErpNo ||
-            "student"
-          }@tcetmumbai.in`;
-
-        sendSubmissionStatusNotification({
-          studentEmail,
-          studentName:
-            sub.studentName,
-          activityName:
-            sub.activityName,
-          points:
-            sub.calculatedPoints,
-          status:
-            "resubmission_requested",
-          remarks,
-          updatedBy: `${activeProfile.name} (TGM)`,
-          submissionId: sub.id,
-        }).catch((e) =>
-          console.warn(
-            "Notification send notice:",
-            e
-          )
-        );
-      }
     };
 
   /* -------------------------------------------------------
@@ -1078,8 +895,6 @@ export default function App() {
         pendingAdminCount={pendingAdminCount}
         totalApprovedPoints={totalApprovedPoints}
         onOpenWhitelist={() => setCurrentRole("admin")}
-        onReseedDb={handleReseedDb}
-        onOpenStorageExplorer={() => setIsStorageExplorerOpen(true)}
       />
     )}
 
@@ -1130,10 +945,29 @@ export default function App() {
             const studentUser = allUsers.find(
               (u) => u.id === s.studentId || u.erpNo === s.studentErpNo
             );
-            return (
-              s.studentDivision === activeProfile.division &&
-              studentUser?.crId === activeProfile.id
-            );
+
+            // 1) Student explicitly assigned this CR.
+            if (studentUser?.crId === activeProfile.id) {
+              return true;
+            }
+
+            // 2) Fallback: same division (and batch when known).
+            //    This covers students who have not yet picked a CR.
+            const crDivision = (activeProfile.division || "").trim();
+            const crBatch = (activeProfile.academicBatch || "").trim();
+
+            const sameDivision =
+              crDivision === "" ||
+              crDivision === "All Divisions" ||
+              s.studentDivision === crDivision;
+
+            const sameBatch =
+              crBatch === "" ||
+              !studentUser ||
+              !studentUser.academicBatch ||
+              studentUser.academicBatch === crBatch;
+
+            return sameDivision && sameBatch;
           })}
           activeProfile={activeProfile}
           onValidateByCR={handleValidateByCR}
@@ -1196,10 +1030,6 @@ export default function App() {
         ) : selectedEntryRole === null ? (
           <RoleSelectionPage
             onSelectRole={(role) => setSelectedEntryRole(role)}
-            onGoToSuperAdmin={() => {
-              window.location.hash = "#superadmin";
-              setIsSuperAdminRoute(true);
-            }}
           />
         ) : (
           <AuthPage
@@ -1208,7 +1038,6 @@ export default function App() {
             onSelectProfile={(profile) => {
               handleSelectProfile(profile);
             }}
-            onReseedDatabase={handleReseedDb}
             preselectedRole={selectedEntryRole}
             onBackToRoleSelection={() => setSelectedEntryRole(null)}
           />
@@ -1221,7 +1050,6 @@ export default function App() {
         activeProfile={activeProfile}
         onSelectProfile={handleSelectProfile}
         onClose={() => setIsAuthModalOpen(false)}
-        onReseedDatabase={handleReseedDb}
       />
     )}
 
@@ -1251,22 +1079,31 @@ export default function App() {
       />
     )}
 
-    {isStorageExplorerOpen && (
-      <StorageExplorerModal
-        submissions={submissions}
-        admins={admins}
-        activeProfile={activeProfile}
-        onClose={() => setIsStorageExplorerOpen(false)}
-      />
-    )}
-
-    {/* Single Global Footer */}
-    <footer className="shrink-0 border-t border-slate-800 bg-slate-900 text-slate-400">
-      <div className="flex min-h-8 items-center justify-center px-4 py-3 sm:px-6 sm:py-4">
-        <p className="text-center text-[9px] leading-relaxed sm:text-[10px]">
-          © 2026 Thakur College of Engineering &amp; Technology (Autonomous).
-          All Rights Reserved.
+    <footer className="shrink-0 border-t border-white/15 bg-black text-[#bbbbbb]">
+      <div aria-hidden="true" className="flex h-1 w-full">
+        <span className="w-1/3 bg-[#0066b1]" />
+        <span className="w-1/3 bg-[#1c69d4]" />
+        <span className="w-1/3 bg-[#e22718]" />
+      </div>
+      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5 px-5 py-7 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-12">
+        <p className="text-xs font-light leading-6">
+          © 2026 Thakur College of Engineering and Technology. All rights reserved.
         </p>
+        <div className="flex flex-col gap-2 border-l border-white/20 pl-4 text-[10px] uppercase tracking-[0.14em] sm:flex-row sm:items-center sm:gap-5">
+          <span className="text-[#7e7e7e]">Technical support</span>
+          <a
+            href="tel:+919561874652"
+            className="text-[#e6e6e6] transition-colors hover:text-white"
+          >
+            Call 9561874652
+          </a>
+          <a
+            href="mailto:1032250476@tcetmumbai.in"
+            className="break-all text-[#e6e6e6] transition-colors hover:text-white"
+          >
+            1032250476@tcetmumbai.in
+          </a>
+        </div>
       </div>
     </footer>
 

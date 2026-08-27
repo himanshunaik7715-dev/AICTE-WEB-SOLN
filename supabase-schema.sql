@@ -1,356 +1,362 @@
--- ============================================================
--- SUPABASE POSTGRES SCHEMA FOR TCET AICTE ACTIVITY DIARY
--- Paste this script into your Supabase Dashboard -> SQL Editor
--- This script is completely IDEMPOTENT (safe to run multiple times)
--- ============================================================
+-- Secure, minimal Supabase schema for the AICTE Activity Diary.
+-- Run this in the Supabase SQL editor after taking a database backup.
 
--- 1. Create or Update Users Table (Student, CR, TGM, Super Admin Profiles)
 CREATE TABLE IF NOT EXISTS public.users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'student',
-  "rollNo" TEXT,
-  roll_no TEXT,
-  "erpNo" TEXT,
-  erp_no TEXT,
-  department TEXT,
-  division TEXT,
-  "academicBatch" TEXT,
-  academic_batch TEXT,
+  email TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL DEFAULT 'student'
+    CHECK (role IN ('student', 'cr', 'admin', 'superadmin')),
+  "studentUid" TEXT,
+  "phoneNumber" TEXT,
+  course TEXT,
+  "rollNo" TEXT NOT NULL DEFAULT '',
+  "erpNo" TEXT NOT NULL DEFAULT '',
+  department TEXT NOT NULL DEFAULT '',
+  division TEXT NOT NULL DEFAULT '',
+  "academicBatch" TEXT NOT NULL DEFAULT '',
+  "photoUrl" TEXT,
   "tgmName" TEXT,
-  tgm_name TEXT,
+  "tgmId" TEXT,
   "crName" TEXT,
-  cr_name TEXT,
+  "crId" TEXT,
+  "tgGroup" TEXT,
   "driveRootFolderId" TEXT,
-  drive_root_folder_id TEXT,
-  "tgmApprovalStatus" TEXT DEFAULT 'approved',
+  "tgmApprovalStatus" TEXT NOT NULL DEFAULT 'pending'
+    CHECK ("tgmApprovalStatus" IN ('pending', 'approved', 'rejected')),
   "approvedBy" TEXT,
   "approvedAt" TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  "customRole" TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Ensure primary key constraint exists if table was created without one previously
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'users_pkey'
-  ) THEN
-    ALTER TABLE public.users ADD PRIMARY KEY (id);
-  END IF;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
--- Ensure missing columns exist on public.users
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "rollNo" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "erpNo" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "academicBatch" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "tgmName" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "crName" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "driveRootFolderId" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "tgmApprovalStatus" TEXT DEFAULT 'approved';
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "approvedBy" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "approvedAt" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS password TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "customRole" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "studentUid" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "phoneNumber" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "crId" TEXT;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS "tgmId" TEXT;
-
-
--- 2. Create or Update Whitelisted / Pending Admins Table
 CREATE TABLE IF NOT EXISTS public.admins (
   id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  designation TEXT DEFAULT 'Teacher Guardian Mentor (TGM)',
-  department TEXT DEFAULT 'Internet of Things (IoT)',
-  role TEXT NOT NULL DEFAULT 'admin',
-  "addedAt" TEXT,
-  added_at TIMESTAMPTZ DEFAULT NOW(),
-  "addedBy" TEXT,
-  added_by TEXT,
-  "isWhitelisted" BOOLEAN DEFAULT TRUE,
-  "approvalStatus" TEXT DEFAULT 'approved'
+  designation TEXT NOT NULL DEFAULT 'Teacher Guardian Mentor (TGM)',
+  department TEXT NOT NULL DEFAULT '',
+  "addedBy" TEXT NOT NULL DEFAULT '',
+  "addedAt" TEXT NOT NULL DEFAULT '',
+  "isWhitelisted" BOOLEAN NOT NULL DEFAULT false,
+  "approvalStatus" TEXT NOT NULL DEFAULT 'pending'
+    CHECK ("approvalStatus" IN ('pending', 'approved', 'rejected'))
 );
 
--- Ensure primary key constraint exists on public.admins
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'admins_pkey'
-  ) THEN
-    ALTER TABLE public.admins ADD PRIMARY KEY (id);
-  END IF;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
--- Ensure missing columns exist on public.admins
-ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS designation TEXT;
-ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS department TEXT;
-ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS "addedAt" TEXT;
-ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS "addedBy" TEXT;
-ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS "isWhitelisted" BOOLEAN DEFAULT TRUE;
-ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS "approvalStatus" TEXT DEFAULT 'approved';
-
-
--- 3. Create or Update Certificate Submissions Table
 CREATE TABLE IF NOT EXISTS public.submissions (
   id TEXT PRIMARY KEY,
-  "studentId" TEXT,
-  student_id TEXT,
-  "studentName" TEXT,
-  student_name TEXT,
-  "studentRollNo" TEXT,
-  student_roll_no TEXT,
-  "studentErpNo" TEXT,
-  student_erp_no TEXT,
-  "studentDepartment" TEXT,
-  student_department TEXT,
-  "studentDivision" TEXT,
-  student_division TEXT,
+  "studentId" TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  "studentName" TEXT NOT NULL,
+  "studentRollNo" TEXT NOT NULL DEFAULT '',
+  "studentErpNo" TEXT NOT NULL DEFAULT '',
+  "studentDepartment" TEXT NOT NULL DEFAULT '',
+  "studentDivision" TEXT NOT NULL DEFAULT '',
   semester TEXT NOT NULL,
-  "activityName" TEXT,
-  activity_name TEXT,
-  "conductedBy" TEXT,
-  conducted_by TEXT,
-  "activityCategoryNo" INT DEFAULT 1,
-  activity_category_no INT DEFAULT 1,
-  "shortDescription" TEXT,
-  short_description TEXT,
-  "hoursSpent" INT DEFAULT 0,
-  hours_spent INT DEFAULT 0,
-  "calculatedPoints" INT DEFAULT 0,
-  calculated_points INT DEFAULT 0,
-  "currentFileDriveId" TEXT,
-  current_file_drive_id TEXT,
-  "fileName" TEXT,
-  file_name TEXT,
-  "fileDriveIdHistory" JSONB DEFAULT '[]'::jsonb,
-  file_drive_id_history JSONB DEFAULT '[]'::jsonb,
-  "isCheckedByCR" BOOLEAN DEFAULT FALSE,
-  is_checked_by_cr BOOLEAN DEFAULT FALSE,
+  "activityName" TEXT NOT NULL,
+  "conductedBy" TEXT NOT NULL DEFAULT '',
+  "activityCategoryNo" INTEGER NOT NULL CHECK ("activityCategoryNo" BETWEEN 1 AND 16),
+  "shortDescription" TEXT NOT NULL DEFAULT '',
+  "hoursSpent" INTEGER NOT NULL DEFAULT 0 CHECK ("hoursSpent" >= 0),
+  "calculatedPoints" INTEGER NOT NULL DEFAULT 0 CHECK ("calculatedPoints" >= 0),
+  "currentFileDriveId" TEXT NOT NULL DEFAULT '',
+  "fileName" TEXT NOT NULL DEFAULT '',
+  "fileDriveIdHistory" JSONB NOT NULL DEFAULT '[]'::jsonb,
+  "isCheckedByCR" BOOLEAN NOT NULL DEFAULT false,
   "crCheckedAt" TEXT,
-  cr_checked_at TIMESTAMPTZ,
   "crCheckedBy" TEXT,
-  cr_checked_by TEXT,
-  "isVerifiedByTGM" BOOLEAN DEFAULT FALSE,
-  is_verified_by_tgm BOOLEAN DEFAULT FALSE,
+  "crRemarks" TEXT,
+  "isVerifiedByTGM" BOOLEAN NOT NULL DEFAULT false,
   "tgmVerifiedAt" TEXT,
-  tgm_verified_at TIMESTAMPTZ,
   "tgmVerifiedBy" TEXT,
-  tgm_verified_by TEXT,
-  status TEXT DEFAULT 'pending_cr',
+  "tgmRemarks" TEXT,
+  "resubmissionRequestedBy" TEXT
+    CHECK ("resubmissionRequestedBy" IN ('cr', 'tgm')),
+  status TEXT NOT NULL DEFAULT 'pending_cr'
+    CHECK (status IN ('imported','naming_error','skipped_not_pdf','pending_cr',
+      'pending_admin','approved','rejected','resubmission_requested')),
   "rejectionReason" TEXT,
-  rejection_reason TEXT,
-  "createdAt" TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TEXT,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
 );
 
--- Ensure primary key constraint exists on public.submissions
-DO $$
+CREATE INDEX IF NOT EXISTS idx_users_email ON public.users (lower(email));
+CREATE INDEX IF NOT EXISTS idx_submissions_student ON public.submissions ("studentId");
+CREATE INDEX IF NOT EXISTS idx_submissions_status ON public.submissions (status);
+
+-- Remove columns and the second certificate subsystem that the application never uses.
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS "tgGroup" TEXT,
+  DROP COLUMN IF EXISTS password,
+  DROP COLUMN IF EXISTS roll_no,
+  DROP COLUMN IF EXISTS erp_no,
+  DROP COLUMN IF EXISTS academic_batch,
+  DROP COLUMN IF EXISTS tgm_name,
+  DROP COLUMN IF EXISTS cr_name,
+  DROP COLUMN IF EXISTS drive_root_folder_id;
+
+ALTER TABLE public.admins
+  DROP COLUMN IF EXISTS role,
+  DROP COLUMN IF EXISTS added_at,
+  DROP COLUMN IF EXISTS added_by;
+
+ALTER TABLE public.submissions
+  DROP COLUMN IF EXISTS student_id,
+  DROP COLUMN IF EXISTS student_name,
+  DROP COLUMN IF EXISTS student_roll_no,
+  DROP COLUMN IF EXISTS student_erp_no,
+  DROP COLUMN IF EXISTS student_department,
+  DROP COLUMN IF EXISTS student_division,
+  DROP COLUMN IF EXISTS activity_name,
+  DROP COLUMN IF EXISTS conducted_by,
+  DROP COLUMN IF EXISTS activity_category_no,
+  DROP COLUMN IF EXISTS short_description,
+  DROP COLUMN IF EXISTS hours_spent,
+  DROP COLUMN IF EXISTS calculated_points,
+  DROP COLUMN IF EXISTS current_file_drive_id,
+  DROP COLUMN IF EXISTS file_name,
+  DROP COLUMN IF EXISTS file_drive_id_history,
+  DROP COLUMN IF EXISTS is_checked_by_cr,
+  DROP COLUMN IF EXISTS cr_checked_at,
+  DROP COLUMN IF EXISTS cr_checked_by,
+  DROP COLUMN IF EXISTS is_verified_by_tgm,
+  DROP COLUMN IF EXISTS tgm_verified_at,
+  DROP COLUMN IF EXISTS tgm_verified_by,
+  DROP COLUMN IF EXISTS rejection_reason,
+  DROP COLUMN IF EXISTS created_at,
+  DROP COLUMN IF EXISTS updated_at;
+
+DROP TABLE IF EXISTS public.ai_classifications CASCADE;
+DROP TABLE IF EXISTS public.certificates CASCADE;
+DROP TABLE IF EXISTS public.faculty CASCADE;
+DROP TABLE IF EXISTS public.students CASCADE;
+DROP TABLE IF EXISTS public.cr_assignments CASCADE;
+DROP TABLE IF EXISTS public.categories CASCADE;
+
+CREATE OR REPLACE FUNCTION public.current_app_role()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT role FROM public.users
+  WHERE id = auth.uid()::text AND "tgmApprovalStatus" = 'approved'
+  LIMIT 1
+$$;
+
+REVOKE ALL ON FUNCTION public.current_app_role() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.current_app_role() TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.current_cr_scope()
+RETURNS TABLE(division TEXT, academic_batch TEXT)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT u.division, u."academicBatch"
+  FROM public.users u
+  WHERE u.id = auth.uid()::text
+    AND u.role = 'cr'
+    AND u."tgmApprovalStatus" = 'approved'
+  LIMIT 1
+$$;
+
+REVOKE ALL ON FUNCTION public.current_cr_scope() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.current_cr_scope() TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.protect_user_privileges()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'submissions_pkey'
-  ) THEN
-    ALTER TABLE public.submissions ADD PRIMARY KEY (id);
+  NEW.email := lower(trim(NEW.email));
+  IF NEW.email !~ '^[^@]+@tcetmumbai\.in$' THEN
+    RAISE EXCEPTION 'Only @tcetmumbai.in accounts are allowed';
   END IF;
-EXCEPTION WHEN OTHERS THEN NULL;
-END $$;
-
-
--- 4. Enable Row Level Security (RLS)
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.submissions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.admins ENABLE ROW LEVEL SECURITY;
-
-
--- 5. Safe & Idempotent Row Level Security Policies
--- Drop older policies if present to prevent duplicate policy errors (42710)
-DROP POLICY IF EXISTS "Allow public read users" ON public.users;
-DROP POLICY IF EXISTS "Allow public insert users" ON public.users;
-DROP POLICY IF EXISTS "Allow public update users" ON public.users;
-DROP POLICY IF EXISTS "Allow public delete users" ON public.users;
-
-DROP POLICY IF EXISTS "Allow public read submissions" ON public.submissions;
-DROP POLICY IF EXISTS "Allow public insert submissions" ON public.submissions;
-DROP POLICY IF EXISTS "Allow public update submissions" ON public.submissions;
-DROP POLICY IF EXISTS "Allow public delete submissions" ON public.submissions;
-
-DROP POLICY IF EXISTS "Allow public read admins" ON public.admins;
-DROP POLICY IF EXISTS "Allow public insert admins" ON public.admins;
-DROP POLICY IF EXISTS "Allow public update admins" ON public.admins;
-DROP POLICY IF EXISTS "Allow public delete admins" ON public.admins;
-
-DROP POLICY IF EXISTS "Public Users Access" ON public.users;
-DROP POLICY IF EXISTS "Public Submissions Access" ON public.submissions;
-DROP POLICY IF EXISTS "Public Admins Access" ON public.admins;
-
--- Re-create clean public access policies for users, submissions, and admins
-CREATE POLICY "Public Users Access" ON public.users FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Submissions Access" ON public.submissions FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Admins Access" ON public.admins FOR ALL USING (true) WITH CHECK (true);
-
-
--- ============================================================
--- 6. CERTIFICATE AUTO-CATEGORIZATION & DRIVE SYNC SCHEMA
--- ============================================================
-
--- Fixed category list (matches AICTE categories)
-CREATE TABLE IF NOT EXISTS public.categories (
-  code TEXT PRIMARY KEY,        -- 'CAT-01', 'CAT-02', ...
-  name TEXT NOT NULL            -- 'Literacy & Education Drive', ...
-);
-
-INSERT INTO public.categories (code, name) VALUES
-  ('CAT-01', 'Literacy & Education Drive'),
-  ('CAT-02', 'Sports & Physical Fitness Support'),
-  ('CAT-03', 'Rural Development & Swachh Bharat'),
-  ('CAT-04', 'Disaster Relief & Healthcare Assistance'),
-  ('CAT-05', 'Environmental Protection & Energy Saving'),
-  ('CAT-06', 'Innovation, Hackathons & Competitions'),
-  ('CAT-07', 'Blood Donation & Health Awareness'),
-  ('CAT-08', 'NGO Volunteering & Community Care'),
-  ('CAT-09', 'Technical Event Organizing & Leadership'),
-  ('CAT-10', 'NSS / NCC / Cultural Activity'),
-  ('CAT-11', 'Digital Literacy & Cyber Security Training'),
-  ('CAT-12', 'Skill Development & Entrepreneurship'),
-  ('CAT-13', 'Women Empowerment & Social Equity'),
-  ('CAT-14', 'Student Body & Club Leadership'),
-  ('CAT-15', 'Industry Visits & Community Research')
-ON CONFLICT (code) DO NOTHING;
-
--- Students table
-CREATE TABLE IF NOT EXISTS public.students (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  full_name TEXT NOT NULL,
-  roll_number TEXT UNIQUE NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  drive_folder_link TEXT,
-  last_synced_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Faculty table
-CREATE TABLE IF NOT EXISTS public.faculty (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  full_name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL
-);
-
--- Certificates table
-CREATE TABLE IF NOT EXISTS public.certificates (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  student_id UUID NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
-  drive_file_id TEXT NOT NULL,
-  file_name TEXT NOT NULL,
-  subfolder_path TEXT,
-  category_code TEXT REFERENCES public.categories(code),
-  title TEXT,
-  drive_modified_time TIMESTAMPTZ,
-  preview_link TEXT,
-  view_link TEXT,
-  status TEXT NOT NULL DEFAULT 'pending_verification'
-    CHECK (status IN (
-      'pending_verification',
-      'naming_error',
-      'skipped_not_pdf',
-      'verified',
-      'rejected'
-    )),
-  verified_by UUID REFERENCES public.faculty(id),
-  verified_at TIMESTAMPTZ,
-  rejection_reason TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (student_id, drive_file_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_certificates_status ON public.certificates(status);
-CREATE INDEX IF NOT EXISTS idx_certificates_student ON public.certificates(student_id);
-CREATE INDEX IF NOT EXISTS idx_certificates_category ON public.certificates(category_code);
-
--- Auto-update updated_at on any change
-CREATE OR REPLACE FUNCTION set_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
+  IF TG_OP = 'INSERT' THEN
+    IF auth.uid() IS NOT NULL AND NEW.id <> auth.uid()::text THEN
+      RAISE EXCEPTION 'A user may only create their own profile';
+    END IF;
+    NEW."tgmApprovalStatus" :=
+      CASE WHEN NEW.role = 'student' THEN 'approved' ELSE 'pending' END;
+    NEW."approvedBy" := NULL;
+    NEW."approvedAt" := NULL;
+  ELSIF public.current_app_role() <> 'superadmin' THEN
+    NEW.id := OLD.id;
+    NEW.email := OLD.email;
+    NEW.role := OLD.role;
+    NEW."tgmApprovalStatus" := OLD."tgmApprovalStatus";
+    NEW."approvedBy" := OLD."approvedBy";
+    NEW."approvedAt" := OLD."approvedAt";
+  END IF;
+  NEW.updated_at := now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
-DROP TRIGGER IF EXISTS trg_certificates_updated_at ON public.certificates;
-CREATE TRIGGER trg_certificates_updated_at
-  BEFORE UPDATE ON public.certificates
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+DROP TRIGGER IF EXISTS trg_protect_user_privileges ON public.users;
+CREATE TRIGGER trg_protect_user_privileges
+BEFORE INSERT OR UPDATE ON public.users
+FOR EACH ROW EXECUTE FUNCTION public.protect_user_privileges();
 
--- AI Classification log table
-CREATE TABLE IF NOT EXISTS public.ai_classifications (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  certificate_id UUID NOT NULL REFERENCES public.certificates(id) ON DELETE CASCADE,
-  model TEXT NOT NULL DEFAULT 'gemini-3.6-flash',
-  raw_response JSONB NOT NULL,
-  category_code TEXT REFERENCES public.categories(code),
-  title TEXT,
-  reason TEXT,
-  applied BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_ai_classifications_certificate ON public.ai_classifications(certificate_id);
-
--- Function to apply AI Classification
-CREATE OR REPLACE FUNCTION apply_ai_classification(
-  p_certificate_id UUID,
-  p_raw_response JSONB,
-  p_category_code TEXT,
-  p_title TEXT,
-  p_reason TEXT
-)
-RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION public.protect_submission_workflow()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE app_role TEXT := public.current_app_role();
 BEGIN
-  INSERT INTO public.ai_classifications (
-    certificate_id, raw_response, category_code, title, reason, applied
-  ) VALUES (
-    p_certificate_id, p_raw_response, p_category_code, p_title, p_reason,
-    p_category_code IS NOT NULL
-  );
-
-  IF p_category_code IS NOT NULL THEN
-    UPDATE public.certificates
-    SET category_code = p_category_code,
-        title = p_title,
-        status = 'pending_verification'
-    WHERE id = p_certificate_id;
-  ELSE
-    UPDATE public.certificates
-    SET status = 'naming_error'
-    WHERE id = p_certificate_id;
+  IF TG_OP = 'INSERT' THEN
+    IF auth.uid() IS NOT NULL THEN NEW."studentId" := auth.uid()::text; END IF;
+    NEW.status := 'imported';
+    NEW."isCheckedByCR" := false;
+    NEW."isVerifiedByTGM" := false;
+  ELSIF app_role = 'student' THEN
+    NEW."studentId" := OLD."studentId";
+    IF OLD.status = 'rejected'
+      OR (
+        OLD.status = 'resubmission_requested'
+        AND OLD."resubmissionRequestedBy" = 'tgm'
+      ) THEN
+      NEW."isCheckedByCR" := false;
+      NEW."crCheckedAt" := NULL;
+      NEW."crCheckedBy" := NULL;
+      NEW."crRemarks" := NULL;
+      NEW."isVerifiedByTGM" := false;
+      NEW."tgmVerifiedAt" := NULL;
+      NEW."tgmVerifiedBy" := NULL;
+      NEW."tgmRemarks" := NULL;
+      NEW.status := 'pending_cr';
+      NEW."resubmissionRequestedBy" := NULL;
+    ELSE
+      NEW."isCheckedByCR" := OLD."isCheckedByCR";
+      NEW."crCheckedAt" := OLD."crCheckedAt";
+      NEW."crCheckedBy" := OLD."crCheckedBy";
+      NEW."crRemarks" := OLD."crRemarks";
+      NEW."isVerifiedByTGM" := OLD."isVerifiedByTGM";
+      NEW."tgmVerifiedAt" := OLD."tgmVerifiedAt";
+      NEW."tgmVerifiedBy" := OLD."tgmVerifiedBy";
+      NEW."tgmRemarks" := OLD."tgmRemarks";
+      NEW.status := CASE
+        WHEN OLD.status = 'resubmission_requested' THEN 'pending_cr'
+        WHEN OLD.status = 'imported' AND NEW.status = 'pending_cr' THEN 'pending_cr'
+        ELSE OLD.status
+      END;
+      IF OLD.status = 'resubmission_requested' THEN
+        NEW."resubmissionRequestedBy" := NULL;
+      END IF;
+    END IF;
+  ELSIF app_role = 'cr' AND NEW.status NOT IN ('pending_admin', 'rejected', 'resubmission_requested') THEN
+    RAISE EXCEPTION 'CR is not allowed to set this submission status';
+  ELSIF app_role = 'admin' AND NEW.status NOT IN ('approved', 'rejected', 'resubmission_requested') THEN
+    RAISE EXCEPTION 'TGM is not allowed to set this submission status';
   END IF;
+  NEW."updatedAt" := now()::text;
+  RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
--- Row Level Security policies
-ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.students ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.faculty ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.certificates ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ai_classifications ENABLE ROW LEVEL SECURITY;
+DROP TRIGGER IF EXISTS trg_protect_submission_workflow ON public.submissions;
+CREATE TRIGGER trg_protect_submission_workflow
+BEFORE INSERT OR UPDATE ON public.submissions
+FOR EACH ROW EXECUTE FUNCTION public.protect_submission_workflow();
 
-DROP POLICY IF EXISTS "Public Categories Access" ON public.categories;
-DROP POLICY IF EXISTS "Public Students Access" ON public.students;
-DROP POLICY IF EXISTS "Public Faculty Access" ON public.faculty;
-DROP POLICY IF EXISTS "Public Certificates Access" ON public.certificates;
-DROP POLICY IF EXISTS "Public AI Classifications Access" ON public.ai_classifications;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.submissions ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public Categories Access" ON public.categories FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Students Access" ON public.students FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Faculty Access" ON public.faculty FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public Certificates Access" ON public.certificates FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public AI Classifications Access" ON public.ai_classifications FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Public Users Access" ON public.users;
+DROP POLICY IF EXISTS "Public Admins Access" ON public.admins;
+DROP POLICY IF EXISTS "Public Submissions Access" ON public.submissions;
+DROP POLICY IF EXISTS users_select ON public.users;
+DROP POLICY IF EXISTS users_insert ON public.users;
+DROP POLICY IF EXISTS users_update ON public.users;
+DROP POLICY IF EXISTS admins_select ON public.admins;
+DROP POLICY IF EXISTS admins_insert ON public.admins;
+DROP POLICY IF EXISTS admins_manage ON public.admins;
+DROP POLICY IF EXISTS submissions_select ON public.submissions;
+DROP POLICY IF EXISTS submissions_insert ON public.submissions;
+DROP POLICY IF EXISTS submissions_update ON public.submissions;
+DROP POLICY IF EXISTS submissions_delete ON public.submissions;
 
+CREATE POLICY users_select ON public.users FOR SELECT TO authenticated
+USING (
+  id = auth.uid()::text
+  OR public.current_app_role() IN ('admin', 'superadmin')
+  OR (role IN ('cr', 'admin', 'superadmin') AND "tgmApprovalStatus" = 'approved')
+  OR (
+    public.current_app_role() = 'cr'
+    AND role = 'student'
+    AND EXISTS (
+      SELECT 1 FROM public.current_cr_scope() cr
+      WHERE (
+          cr.division = public.users.division
+          OR cr.division IS NULL
+          OR cr.division = ''
+          OR cr.division = 'All Divisions'
+        )
+        AND (
+          cr.academic_batch = public.users."academicBatch"
+          OR cr.academic_batch IS NULL
+          OR cr.academic_batch = ''
+        )
+    )
+  )
+);
+CREATE POLICY users_insert ON public.users FOR INSERT TO authenticated
+WITH CHECK (id = auth.uid()::text);
+CREATE POLICY users_update ON public.users FOR UPDATE TO authenticated
+USING (id = auth.uid()::text OR public.current_app_role() = 'superadmin')
+WITH CHECK (id = auth.uid()::text OR public.current_app_role() = 'superadmin');
 
+CREATE POLICY admins_select ON public.admins FOR SELECT TO authenticated
+USING (
+  id = auth.uid()::text
+  OR ("approvalStatus" = 'approved' AND "isWhitelisted")
+  OR public.current_app_role() = 'superadmin'
+);
+CREATE POLICY admins_insert ON public.admins FOR INSERT TO authenticated
+WITH CHECK (
+  (id = auth.uid()::text AND "approvalStatus" = 'pending' AND NOT "isWhitelisted")
+  OR public.current_app_role() = 'superadmin'
+);
+CREATE POLICY admins_manage ON public.admins FOR ALL TO authenticated
+USING (public.current_app_role() = 'superadmin')
+WITH CHECK (public.current_app_role() = 'superadmin');
+
+CREATE POLICY submissions_select ON public.submissions FOR SELECT TO authenticated
+USING (
+  "studentId" = auth.uid()::text
+  OR public.current_app_role() IN ('admin', 'superadmin')
+  OR (
+    public.current_app_role() = 'cr'
+    AND EXISTS (
+      SELECT 1 FROM public.users student
+      WHERE student.id = "studentId" AND student."crId" = auth.uid()::text
+    )
+  )
+);
+CREATE POLICY submissions_insert ON public.submissions FOR INSERT TO authenticated
+WITH CHECK ("studentId" = auth.uid()::text);
+CREATE POLICY submissions_update ON public.submissions FOR UPDATE TO authenticated
+USING (
+  "studentId" = auth.uid()::text
+  OR public.current_app_role() IN ('admin', 'superadmin')
+  OR (
+    public.current_app_role() = 'cr'
+    AND EXISTS (
+      SELECT 1 FROM public.users student
+      WHERE student.id = "studentId" AND student."crId" = auth.uid()::text
+    )
+  )
+);
+CREATE POLICY submissions_delete ON public.submissions FOR DELETE TO authenticated
+USING ("studentId" = auth.uid()::text OR public.current_app_role() = 'superadmin');
+
+REVOKE ALL ON public.users, public.admins, public.submissions FROM anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.users, public.admins, public.submissions TO authenticated;

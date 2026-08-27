@@ -24,14 +24,12 @@ import {
   UserPlus,
   Building,
   ShieldAlert,
-  Sparkles,
 } from 'lucide-react';
 
 interface AuthPageProps {
   activeProfile: UserProfile;
   allUsers?: UserProfile[];
   onSelectProfile: (profile: UserProfile) => void;
-  onReseedDatabase: () => void;
   /** Role pre-selected from the Role Selection screen */
   preselectedRole?: 'student' | 'cr' | 'admin';
   /** Go back to the role selection screen */
@@ -67,7 +65,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   activeProfile,
   allUsers = [],
   onSelectProfile,
-  onReseedDatabase,
   preselectedRole,
   onBackToRoleSelection,
 }) => {
@@ -138,7 +135,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     setSuccessMsg('');
     setLoading(true);
     try {
-      const profile = await loginWithManualCredentials(crEmail, crPassword, allUsers);
+      const profile = await loginWithManualCredentials(crEmail, crPassword, 'cr', allUsers);
       setSuccessMsg(`Authenticated successfully as ${profile.customRole || profile.name}!`);
       setTimeout(() => {
         onSelectProfile(profile);
@@ -223,10 +220,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   }
 
   return (
-    <div className="min-h-[85vh] flex items-center justify-center p-4">
+    <div className="min-h-[85dvh] flex items-center justify-center p-3 sm:p-4">
       <div className="max-w-4xl w-full bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden grid grid-cols-1 md:grid-cols-12">
         {/* Left Side: TCET Branding Banner */}
-        <div className="md:col-span-5 bg-gradient-to-br from-indigo-900 via-indigo-850 to-slate-950 p-8 text-white flex flex-col justify-between relative overflow-hidden">
+        <div className="md:col-span-5 bg-gradient-to-br from-indigo-900 via-indigo-850 to-slate-950 p-5 sm:p-8 text-white flex flex-col justify-between relative overflow-hidden">
           <div className="absolute -right-12 -top-12 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
           <div className="absolute -left-12 -bottom-12 w-40 h-40 bg-indigo-400/10 rounded-full blur-2xl pointer-events-none" />
 
@@ -277,7 +274,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         </div>
 
         {/* Right Side: Authentication / Registration Forms */}
-        <div className="md:col-span-7 p-6 sm:p-8 flex flex-col justify-center space-y-5">
+        <div className="min-w-0 md:col-span-7 p-4 sm:p-8 flex flex-col justify-center space-y-5">
           {/* Back to role selection */}
           {onBackToRoleSelection && (
             <button
@@ -402,17 +399,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     <LogIn className="w-4 h-4" />
                   </button>
 
-                  {/* Default CR hint */}
-                  {/* <div className="bg-rose-50/60 border border-rose-100 rounded-xl p-3 text-[11px] text-rose-800 flex items-start gap-2">
-                    <Sparkles className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                    <div>
-                      <strong>Default CR Credentials:</strong>
-                      <br />
-                      Email: <code className="font-mono font-bold bg-white px-1 py-0.5 rounded border border-rose-200">cr@tcetmumbai.in</code>
-                      {' | '}
-                      Password: <code className="font-mono font-bold bg-white px-1 py-0.5 rounded border border-rose-200">2026@tcetiotcr</code>
-                    </div>
-                  </div> */}
                 </form>
               )}
 
@@ -552,6 +538,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   <GoogleLogin
                     onSuccess={handleGoogleSuccess}
                     onError={() => setErrorMsg('Google Sign-In failed or was cancelled.')}
+                    hosted_domain="tcetmumbai.in"
                     theme="outline"
                     size="large"
                     text="continue_with"
@@ -592,7 +579,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 min-[481px]:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-800 mb-1">
                     I am a...
@@ -639,7 +626,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 min-[481px]:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-800 mb-1">ERP No</label>
                   <input

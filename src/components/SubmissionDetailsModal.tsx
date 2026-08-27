@@ -76,7 +76,7 @@ export const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-2xl sm:rounded-3xl max-w-lg w-full max-h-[calc(100dvh-1.5rem)] shadow-2xl border border-slate-200 overflow-y-auto">
 
         {/* Colorful Header */}
         <div className={`bg-gradient-to-r ${headerGradient} p-5 relative`}>
@@ -149,7 +149,7 @@ export const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
             </div>
 
             {/* Stats Row */}
-            <div className="grid grid-cols-3 gap-2 pt-1">
+            <div className="grid grid-cols-1 min-[400px]:grid-cols-3 gap-2 pt-1">
               <div className="bg-white rounded-xl border border-indigo-100 p-2.5 text-center">
                 <p className="text-[10px] text-slate-400 font-semibold">Category</p>
                 <p className="font-extrabold text-indigo-700 text-sm">CAT-{String(submission.activityCategoryNo).padStart(2, '0')}</p>
@@ -169,7 +169,7 @@ export const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
           </div>
 
           {/* Two-Stage Verification */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 min-[481px]:grid-cols-2 gap-2">
             <div className={`rounded-2xl border p-3 ${submission.isCheckedByCR ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
               <div className={`flex items-center gap-1.5 font-bold text-xs ${submission.isCheckedByCR ? 'text-emerald-800' : 'text-amber-800'}`}>
                 <UserCheck className="w-3.5 h-3.5" />
@@ -227,7 +227,7 @@ export const SubmissionDetailsModal: React.FC<SubmissionDetailsModalProps> = ({
                       : 'bg-slate-800/50'
                   }`}
                 >
-                  <span className={`text-[11px] font-mono truncate max-w-[180px] ${isCurrent ? 'text-indigo-200 font-bold' : 'text-slate-500'}`}>
+                  <span className={`min-w-0 max-w-[45vw] sm:max-w-[180px] truncate text-[11px] font-mono ${isCurrent ? 'text-indigo-200 font-bold' : 'text-slate-500'}`}>
                     v{idx + 1}: {driveId}
                   </span>
                   <div className="flex items-center gap-2 shrink-0">

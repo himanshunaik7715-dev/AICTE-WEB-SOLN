@@ -1,3 +1,5 @@
+import { supabase } from '../lib/supabase';
+
 /**
  * Google Drive Storage & Integration Helper
  * Provides file uploads, folder creation structure, and view links for AICTE certificate files.
@@ -181,7 +183,7 @@ export function parseFileNameConvention(fileName: string): {
   const nameNoExt = fileName.replace(/\.pdf$/i, '').trim();
 
   // Full match: SEM-01_CAT-06_Title
-  const fullMatch = nameNoExt.match(/^(SEM[_\s-]*0?([1-8]))[_\s-]+(CAT[_\s-]*0?([1-9]|1[0-5]))[_\s-]+(.+)$/i);
+  const fullMatch = nameNoExt.match(/^(SEM[_\s-]*0?([1-8]))[_\s-]+(CAT[_\s-]*0?([1-9]|1[0-6]))[_\s-]+(.+)$/i);
   if (fullMatch) {
     const semNum = fullMatch[2];
     const catNum = parseInt(fullMatch[4], 10);
@@ -204,7 +206,7 @@ export function parseFileNameConvention(fileName: string): {
   }
 
   // Legacy match: CAT-06_Title
-  const catMatch = nameNoExt.match(/^(CAT[_\s-]*0?([1-9]|1[0-5]))[_\s-]+(.+)$/i);
+  const catMatch = nameNoExt.match(/^(CAT[_\s-]*0?([1-9]|1[0-6]))[_\s-]+(.+)$/i);
   if (catMatch) {
     const catNum = parseInt(catMatch[2], 10);
     const catCode = `CAT-${catNum.toString().padStart(2, '0')}`;
@@ -259,9 +261,12 @@ export async function fetchGoogleDriveFolderFiles(
   error?: string;
 }> {
   try {
-    const res = await fetch('https://aicte-web-soln.onrender.com/api/drive/fetch-folder-files', {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error('Authentication required');
+    const res = await fetch('/api/drive/fetch-folder-files', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ folderUrlOrId, semester }),
     });
 

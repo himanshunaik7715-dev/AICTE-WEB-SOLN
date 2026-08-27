@@ -4,12 +4,6 @@ import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 
-import {
-  enqueueEmail,
-  getJobStatus,
-  getEmailServiceHealth,
-} from './src/services/resendServerService';
-
 dotenv.config();
 
 const app = express();
@@ -86,6 +80,78 @@ app.get('/health', (_req, res) => {
   });
 });
 
+const authClient = (() => {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  return url && anonKey ? createClient(url, anonKey) : null;
+})();
+
+const serviceClient = (() => {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return url && serviceKey
+    ? createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+    : null;
+})();
+
+const requireAuth: express.RequestHandler = async (req, res, next) => {
+  const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  if (!authClient || !token) {
+    return res.status(401).json({ success: false, error: 'Authentication required' });
+  }
+  const { data, error } = await authClient.auth.getUser(token);
+  if (error || !data.user?.email || !data.user.email.toLowerCase().endsWith('@tcetmumbai.in')) {
+    return res.status(401).json({ success: false, error: 'Invalid or expired session' });
+  }
+  res.locals.user = data.user;
+  next();
+};
+
+app.post('/api/auth/bootstrap-profile', requireAuth, async (_req, res) => {
+  if (!serviceClient) {
+    return res.status(503).json({ success: false, error: 'Server authentication is not configured' });
+  }
+
+  const authUser = res.locals.user;
+  const email = String(authUser.email).trim().toLowerCase();
+  const { data: whitelist, error: whitelistError } = await serviceClient
+    .from('admins')
+    .select('*')
+    .eq('email', email)
+    .maybeSingle();
+  if (whitelistError || !whitelist || !whitelist.isWhitelisted || whitelist.approvalStatus !== 'approved') {
+    return res.status(403).json({ success: false, error: 'Faculty account is not whitelisted' });
+  }
+
+  const { data: existing } = await serviceClient
+    .from('users')
+    .select('*')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (existing && existing.id !== authUser.id) {
+    const { error } = await serviceClient.from('users').update({ id: authUser.id }).eq('email', email);
+    if (error) return res.status(500).json({ success: false, error: error.message });
+  }
+
+  const profile = {
+    id: authUser.id,
+    name: whitelist.name || authUser.user_metadata?.full_name || authUser.user_metadata?.name || email.split('@')[0],
+    email,
+    role: 'admin',
+    rollNo: 'FAC',
+    erpNo: `FAC-${email.split('@')[0].toUpperCase()}`,
+    department: whitelist.department || 'Internet of Things (IoT)',
+    division: existing?.division || '',
+    academicBatch: existing?.academicBatch || '',
+    tgmApprovalStatus: 'approved',
+    customRole: existing?.customRole,
+  };
+  const { data, error } = await serviceClient.from('users').upsert(profile).select('*').single();
+  if (error) return res.status(500).json({ success: false, error: error.message });
+  return res.json({ success: true, recognized: true, profile: data });
+});
+
 
 // =========================================================
 // GOOGLE DRIVE
@@ -93,18 +159,13 @@ app.get('/health', (_req, res) => {
 
 app.post(
   '/api/drive/fetch-folder-files',
+  requireAuth,
   async (req, res) => {
     try {
       const {
         folderUrlOrId,
         semester,
       } = req.body;
-
-      console.log(
-        '[Google Drive] Request received:',
-        folderUrlOrId,
-        semester
-      );
 
       if (!folderUrlOrId) {
         return res.status(400).json({
@@ -135,11 +196,6 @@ app.post(
         folderId =
           folderId.split('?')[0];
       }
-
-      console.log(
-        '[Google Drive] Folder ID:',
-        folderId
-      );
 
       // -------------------------------------------------------
       // Google API key
@@ -196,11 +252,6 @@ app.post(
           `&fields=${fields}` +
           `&pageSize=1000` +
           `&key=${apiKey}`;
-
-        console.log(
-          `[Google Drive] Fetching depth ${depth}:`,
-          currentPath || 'Root'
-        );
 
         const response =
           await fetch(apiUrl);
@@ -280,10 +331,6 @@ app.post(
         await fetchDriveTree(
           folderId
         );
-
-      console.log(
-        `[Google Drive] Total files found: ${rawDriveItems.length}`
-      );
 
       // =======================================================
       // PROCESS FILES
@@ -380,7 +427,7 @@ app.post(
 
             const fullMatch =
               nameNoExt.match(
-                /^SEM[_\s-]*0?([1-8])[_\s-]+CAT[_\s-]*0?([1-9]|1[0-5])[_\s-]+(.+)$/i
+                /^SEM[_\s-]*0?([1-8])[_\s-]+CAT[_\s-]*0?([1-9]|1[0-6])[_\s-]+(.+)$/i
               );
 
             if (fullMatch) {
@@ -447,7 +494,7 @@ app.post(
             else {
               const catMatch =
                 nameNoExt.match(
-                  /^CAT[_\s-]*0?([1-9]|1[0-5])[_\s-]+(.+)$/i
+                  /^CAT[_\s-]*0?([1-9]|1[0-6])[_\s-]+(.+)$/i
                 );
 
               if (catMatch) {
@@ -583,7 +630,6 @@ app.post(
     }
   }
 );
-
 
 // =========================================================
 // SEMESTER DETECTION
@@ -744,6 +790,7 @@ function mapSubfolderToSemester(
 
 app.post(
   '/api/gemini/classify-certificate',
+  requireAuth,
   async (req, res) => {
     try {
       const {
@@ -751,7 +798,6 @@ app.post(
         mimeType,
         fileName,
         fileText,
-        certificateId,
       } = req.body;
 
       if (
@@ -780,63 +826,6 @@ app.post(
           fileText,
         });
 
-      const supabaseUrl =
-        process.env.SUPABASE_URL ||
-        process.env.VITE_SUPABASE_URL;
-
-      const serviceRoleKey =
-        process.env
-          .SUPABASE_SERVICE_ROLE_KEY;
-
-      if (
-        certificateId &&
-        supabaseUrl &&
-        serviceRoleKey
-      ) {
-        try {
-          const supabaseAdmin =
-            createClient(
-              supabaseUrl,
-              serviceRoleKey,
-              {
-                auth: {
-                  autoRefreshToken:
-                    false,
-                  persistSession:
-                    false,
-                },
-              }
-            );
-
-          const categoryCode =
-            classification.category !==
-            'unrecognized'
-              ? classification.category
-              : null;
-
-          await supabaseAdmin.rpc(
-            'apply_ai_classification',
-            {
-              p_certificate_id:
-                certificateId,
-              p_raw_response:
-                classification,
-              p_category_code:
-                categoryCode,
-              p_title:
-                classification.title,
-              p_reason:
-                classification.reason,
-            }
-          );
-        } catch (dbErr) {
-          console.warn(
-            '[Gemini] Database RPC warning:',
-            dbErr
-          );
-        }
-      }
-
       return res.json({
         success: true,
         data: classification,
@@ -852,608 +841,6 @@ app.post(
         error:
           err?.message ||
           'Failed to classify certificate with Gemini AI.',
-      });
-    }
-  }
-);
-
-
-// =========================================================
-// EMAIL VERIFICATION
-// =========================================================
-
-const verificationStore =
-  new Map<
-    string,
-    {
-      code: string;
-      name: string;
-      expiresAt: number;
-      verified: boolean;
-    }
-  >();
-
-
-// ---------------------------------------------------------
-// SEND VERIFICATION
-// ---------------------------------------------------------
-
-app.post(
-  '/api/auth/send-verification',
-  async (req, res) => {
-    try {
-      const {
-        email,
-        name,
-      } = req.body;
-
-      if (
-        !email ||
-        typeof email !== 'string'
-      ) {
-        return res.status(400).json({
-          success: false,
-          error:
-            'Email is required',
-        });
-      }
-
-      const cleanEmail =
-        email
-          .trim()
-          .toLowerCase();
-
-      const code =
-        Math.floor(
-          100000 +
-            Math.random() * 900000
-        ).toString();
-
-      const expiresAt =
-        Date.now() +
-        10 * 60 * 1000;
-
-      verificationStore.set(
-        cleanEmail,
-        {
-          code,
-          name:
-            name ||
-            cleanEmail.split('@')[0],
-          expiresAt,
-          verified: false,
-        }
-      );
-
-      const emailHtml = `
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-          <div style="background:#312e81;padding:20px;text-align:center;">
-            <h2 style="color:white;margin:0;">
-              Thakur College of Engineering & Technology
-            </h2>
-          </div>
-
-          <div style="padding:25px;text-align:center;">
-            <h3>Verify Your Email Address</h3>
-
-            <p>
-              Hello <strong>${name || 'TCET Student'}</strong>,
-            </p>
-
-            <p>
-              Use the following 6-digit verification code:
-            </p>
-
-            <div style="
-              font-size:36px;
-              font-weight:bold;
-              letter-spacing:8px;
-              padding:20px;
-              background:#f1f5f9;
-              display:inline-block;
-            ">
-              ${code}
-            </div>
-
-            <p>
-              This code is valid for 10 minutes.
-            </p>
-          </div>
-        </div>
-      `;
-
-      const result =
-        enqueueEmail({
-          to: cleanEmail,
-          subject:
-            `[TCET Verification] ${code} is your email verification code`,
-          html: emailHtml,
-          templateType:
-            'verification_code',
-          idempotencyKey:
-            `verif_code_${cleanEmail}_${Date.now()}`,
-        });
-
-      return res.json({
-        success: true,
-        message:
-          'Verification code dispatched',
-        email: cleanEmail,
-        jobId:
-          result.jobId,
-      });
-    } catch (err: any) {
-      console.error(
-        '[Email Verification] Error:',
-        err
-      );
-
-      return res.status(500).json({
-        success: false,
-        error:
-          err?.message ||
-          'Failed to send verification code',
-      });
-    }
-  }
-);
-
-
-// ---------------------------------------------------------
-// VERIFY CODE
-// ---------------------------------------------------------
-
-app.post(
-  '/api/auth/verify-code',
-  async (req, res) => {
-    try {
-      const {
-        email,
-        code,
-      } = req.body;
-
-      if (
-        !email ||
-        !code
-      ) {
-        return res.status(400).json({
-          success: false,
-          error:
-            'Email and verification code are required',
-        });
-      }
-
-      const cleanEmail =
-        email
-          .trim()
-          .toLowerCase();
-
-      const inputCode =
-        String(code).trim();
-
-      const stored =
-        verificationStore.get(
-          cleanEmail
-        );
-
-      if (!stored) {
-        return res.status(400).json({
-          success: false,
-          error:
-            'No active verification code found for this email.',
-        });
-      }
-
-      if (
-        Date.now() >
-        stored.expiresAt
-      ) {
-        verificationStore.delete(
-          cleanEmail
-        );
-
-        return res.status(400).json({
-          success: false,
-          error:
-            'Verification code has expired.',
-        });
-      }
-
-      if (
-        stored.code !==
-        inputCode
-      ) {
-        return res.status(400).json({
-          success: false,
-          error:
-            'Invalid verification code.',
-        });
-      }
-
-      stored.verified =
-        true;
-
-      return res.json({
-        success: true,
-        message:
-          'Email verified successfully',
-        email:
-          cleanEmail,
-      });
-    } catch (err: any) {
-      console.error(
-        '[Email Verification] Verify error:',
-        err
-      );
-
-      return res.status(500).json({
-        success: false,
-        error:
-          err?.message ||
-          'Failed to verify code',
-      });
-    }
-  }
-);
-
-
-// ---------------------------------------------------------
-// CHECK VERIFICATION
-// ---------------------------------------------------------
-
-app.post(
-  '/api/auth/check-verification-status',
-  (req, res) => {
-    const { email } =
-      req.body;
-
-    if (!email) {
-      return res.json({
-        verified: false,
-      });
-    }
-
-    const cleanEmail =
-      String(email)
-        .trim()
-        .toLowerCase();
-
-    const stored =
-      verificationStore.get(
-        cleanEmail
-      );
-
-    return res.json({
-      verified:
-        Boolean(
-          stored?.verified
-        ),
-    });
-  }
-);
-
-
-// =========================================================
-// EMAIL SEND
-// =========================================================
-
-app.post(
-  '/api/email/send',
-  (req, res) => {
-    try {
-      const {
-        to,
-        subject,
-        html,
-        text,
-        from,
-        idempotencyKey,
-        templateType,
-        metadata,
-      } = req.body;
-
-      if (
-        !to ||
-        !subject ||
-        !html
-      ) {
-        return res.status(400).json({
-          success: false,
-          error:
-            'Fields "to", "subject", and "html" are required.',
-        });
-      }
-
-      const result =
-        enqueueEmail({
-          to,
-          subject,
-          html,
-          text,
-          from,
-          idempotencyKey,
-          templateType,
-          metadata,
-        });
-
-      return res.json({
-        success: true,
-        ...result,
-      });
-    } catch (err: any) {
-      console.error(
-        '[Email] Send error:',
-        err
-      );
-
-      return res.status(500).json({
-        success: false,
-        error:
-          err?.message ||
-          'Server error queueing email',
-      });
-    }
-  }
-);
-
-
-// =========================================================
-// EMAIL BATCH
-// =========================================================
-
-app.post(
-  '/api/email/send-batch',
-  (req, res) => {
-    try {
-      const {
-        emails,
-      } = req.body;
-
-      if (
-        !Array.isArray(emails) ||
-        emails.length === 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          error:
-            'Array "emails" is required.',
-        });
-      }
-
-      const results =
-        emails.map(
-          (opts) =>
-            enqueueEmail({
-              to: opts.to,
-              subject:
-                opts.subject,
-              html:
-                opts.html,
-              text:
-                opts.text,
-              from:
-                opts.from,
-              idempotencyKey:
-                opts.idempotencyKey,
-              templateType:
-                opts.templateType,
-              metadata:
-                opts.metadata,
-            })
-        );
-
-      return res.json({
-        success: true,
-        count:
-          results.length,
-        jobs:
-          results,
-      });
-    } catch (err: any) {
-      console.error(
-        '[Email] Batch error:',
-        err
-      );
-
-      return res.status(500).json({
-        success: false,
-        error:
-          err?.message ||
-          'Server error queueing batch emails',
-      });
-    }
-  }
-);
-
-
-// =========================================================
-// EMAIL STATUS
-// =========================================================
-
-app.get(
-  '/api/email/status/:jobId',
-  (req, res) => {
-    const job =
-      getJobStatus(
-        req.params.jobId
-      );
-
-    if (!job) {
-      return res.status(404).json({
-        success: false,
-        error:
-          'Job not found',
-      });
-    }
-
-    return res.json({
-      id: job.id,
-      status: job.status,
-      attempts:
-        job.attempts,
-      createdAt:
-        job.createdAt,
-      messageId:
-        job.messageId,
-      error:
-        job.error,
-    });
-  }
-);
-
-
-// =========================================================
-// EMAIL HEALTH
-// =========================================================
-
-app.get(
-  '/api/email/health',
-  (_req, res) => {
-    return res.json(
-      getEmailServiceHealth()
-    );
-  }
-);
-
-
-// =========================================================
-// CHECK USER EXISTS
-// =========================================================
-
-app.post(
-  '/api/check-user-exists',
-  async (req, res) => {
-    try {
-      const { email } =
-        req.body;
-
-      if (
-        !email ||
-        typeof email !== 'string'
-      ) {
-        return res.status(400).json({
-          exists: false,
-          error:
-            'Email is required',
-        });
-      }
-
-      const cleanEmail =
-        email
-          .trim()
-          .toLowerCase();
-
-      const supabaseUrl =
-        process.env.SUPABASE_URL ||
-        process.env.VITE_SUPABASE_URL;
-
-      const serviceRoleKey =
-        process.env
-          .SUPABASE_SERVICE_ROLE_KEY;
-
-      if (
-        !supabaseUrl ||
-        !serviceRoleKey
-      ) {
-        return res.json({
-          exists: false,
-          message:
-            'Supabase credentials not configured',
-        });
-      }
-
-      const supabaseAdmin =
-        createClient(
-          supabaseUrl,
-          serviceRoleKey,
-          {
-            auth: {
-              autoRefreshToken:
-                false,
-              persistSession:
-                false,
-            },
-          }
-        );
-
-      let exists =
-        false;
-
-      // -----------------------------------------------------
-      // Supabase Auth
-      // -----------------------------------------------------
-
-      try {
-        const {
-          data,
-          error,
-        } =
-          await supabaseAdmin
-            .auth.admin.listUsers();
-
-        if (
-          !error &&
-          data?.users &&
-          Array.isArray(
-            data.users
-          )
-        ) {
-          exists =
-            data.users.some(
-              (user: any) =>
-                user.email
-                  ?.toLowerCase() ===
-                cleanEmail
-            );
-        }
-      } catch (adminErr) {
-        console.warn(
-          '[Supabase] listUsers warning:',
-          adminErr
-        );
-      }
-
-      // -----------------------------------------------------
-      // users table fallback
-      // -----------------------------------------------------
-
-      if (!exists) {
-        const {
-          data,
-          error,
-        } =
-          await supabaseAdmin
-            .from('users')
-            .select('email')
-            .eq(
-              'email',
-              cleanEmail
-            )
-            .maybeSingle();
-
-        if (
-          !error &&
-          data
-        ) {
-          exists =
-            true;
-        }
-      }
-
-      return res.json({
-        exists,
-      });
-    } catch (err: any) {
-      console.error(
-        '[Supabase] User check error:',
-        err
-      );
-
-      return res.status(500).json({
-        exists: false,
-        error:
-          err?.message ||
-          'Failed to check user',
       });
     }
   }

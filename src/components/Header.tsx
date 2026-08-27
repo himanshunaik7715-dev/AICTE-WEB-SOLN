@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { UserRole, UserProfile } from "../types";
-import { GraduationCap, User, LogOut } from "lucide-react";
+import { User, LogOut, Menu, X } from "lucide-react";
 
 interface HeaderProps {
   currentRole: UserRole | "auth";
@@ -12,8 +12,6 @@ interface HeaderProps {
   pendingAdminCount: number;
   totalApprovedPoints: number;
   onOpenWhitelist?: () => void;
-  onReseedDb?: () => void;
-  onOpenStorageExplorer?: () => void;
 }
 
 /**
@@ -49,6 +47,8 @@ export const Header: React.FC<HeaderProps> = ({
   activeProfile,
   onLogout,
 }) => {
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
+
   // Header is not shown on authentication page
   if (currentRole === "auth") {
     return null;
@@ -65,21 +65,11 @@ export const Header: React.FC<HeaderProps> = ({
               BRAND
           ========================================================== */}
           <div className="flex items-center gap-3 min-w-0 w-full sm:w-auto">
-            <div
-              className="
-              w-10 h-10
-              shrink-0
-              bg-indigo-600
-              rounded-xl
-              text-white
-              flex
-              items-center
-              justify-center
-              shadow-sm
-            "
-            >
-              <GraduationCap className="w-5 h-5" />
-            </div>
+            <img
+              src="/tcet-logo.ico"
+              alt="TCET logo"
+              className="h-12 w-12 shrink-0 object-contain"
+            />
 
             <div className="min-w-0">
               <h1
@@ -121,6 +111,16 @@ export const Header: React.FC<HeaderProps> = ({
             sm:w-auto
           "
           >
+            <button
+              type="button"
+              onClick={() => setMobileDetailsOpen((open) => !open)}
+              aria-expanded={mobileDetailsOpen}
+              aria-controls="mobile-profile-details"
+              aria-label={mobileDetailsOpen ? "Hide profile details" : "Show profile details"}
+              className="sm:hidden flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700"
+            >
+              {mobileDetailsOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
             {/* User Profile Badge */}
             <div
               className="
@@ -205,15 +205,14 @@ export const Header: React.FC<HeaderProps> = ({
             USER INFORMATION BAR
         ============================================================ */}
         <div
-          className="
-          border-t
-          border-slate-100
-          py-3
-        "
+          id="mobile-profile-details"
+          className={`${mobileDetailsOpen ? "block" : "hidden"} border-t border-slate-100 py-3 sm:block`}
         >
           <div
             className="
-            flex
+            grid
+            grid-cols-1
+            sm:flex
             items-center
             gap-x-4
             gap-y-2
@@ -232,72 +231,109 @@ export const Header: React.FC<HeaderProps> = ({
               </strong>
             </div>
 
-            <span className="text-slate-300 hidden sm:inline">|</span>
-
-            {/* ========================================================
-                ERP NUMBER
-            ======================================================== */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500">ERP:</span>
-
-              <strong className="text-slate-800">
-                {activeProfile.erpNo ?? "N/A"}
-              </strong>
-            </div>
-
-            <span className="text-slate-300 hidden sm:inline">|</span>
-            {/* ========================================================
-                DEPARTMENT
-            ======================================================== */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500">Department:</span>
-
-              <strong className="text-slate-800">
-                {activeProfile.department || "N/A"}
-              </strong>
-            </div>
-
-            <span className="text-slate-300 hidden sm:inline">|</span>
-            {/* ========================================================
-                COURSE
-            ======================================================== */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500">Course:</span>
-
-              <strong className="text-slate-800">
-                {formatCourse(activeProfile.course)}
-              </strong>
-            </div>
-
-            <span className="text-slate-300 hidden sm:inline">|</span>
-
-            {/* ========================================================
-                DIVISION (Hidden for 2024-2028 or N/A)
-            ======================================================== */}
-            {(!activeProfile.academicBatch?.includes('2024-2028') && activeProfile.division !== 'N/A') && (
+            {currentRole !== "cr" && currentRole !== "admin" && currentRole !== "superadmin" && (
               <>
+                <span className="text-slate-300 hidden sm:inline">|</span>
+
+                {/* ERP NUMBER */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-slate-500">Division:</span>
+                  <span className="text-slate-500">ERP:</span>
 
                   <strong className="text-slate-800">
-                    {activeProfile.division || "N/A"}
+                    {activeProfile.erpNo ?? "N/A"}
                   </strong>
                 </div>
+              </>
+            )}
 
+            {currentRole !== "superadmin" && (
+              <>
                 <span className="text-slate-300 hidden sm:inline">|</span>
+                {/* ========================================================
+                    DEPARTMENT
+                ======================================================== */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500">Department:</span>
+
+                  <strong className="text-slate-800">
+                    {activeProfile.department || "N/A"}
+                  </strong>
+                </div>
+              </>
+            )}
+
+            {currentRole === "superadmin" && (
+              <>
+                <span className="text-slate-300 hidden sm:inline">|</span>
+                {/* ========================================================
+                    DEPARTMENT (Super Admin — restricted to allowed values)
+                ======================================================== */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500">Department:</span>
+
+                  <strong className="text-slate-800">
+                    {activeProfile.department === "CSE(Internet oF Things)"
+                      ? "CSE (Internet of Things)"
+                      : "Internet of Things (IoT)"}
+                  </strong>
+                </div>
+              </>
+            )}
+
+            {currentRole !== "cr" && currentRole !== "admin" && currentRole !== "superadmin" && (
+              <>
+                <span className="text-slate-300 hidden sm:inline">|</span>
+                {/* ========================================================
+                    COURSE
+                ======================================================== */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500">Course:</span>
+
+                  <strong className="text-slate-800">
+                    {currentRole === "cr" || currentRole === "admin"
+                      ? activeProfile.academicBatch === "2025-2029"
+                        ? "B.Tech CSE (Internet of Things)"
+                        : "Internet of Things (IoT)"
+                      : formatCourse(activeProfile.course)}
+                  </strong>
+                </div>
               </>
             )}
 
             {/* ========================================================
-                ROLL NUMBER
+                DIVISION (Hidden for 2024-2028, N/A, or super admin)
             ======================================================== */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-slate-500">Roll No:</span>
+            {currentRole !== "superadmin" &&
+              !activeProfile.academicBatch?.includes('2024-2028') &&
+              activeProfile.division !== 'N/A' && (
+                <>
+                  <span className="text-slate-300 hidden sm:inline">|</span>
 
-              <strong className="text-slate-800">
-                {activeProfile.rollNo ?? "N/A"}
-              </strong>
-            </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-500">Division:</span>
+
+                    <strong className="text-slate-800">
+                      {activeProfile.division || "N/A"}
+                    </strong>
+                  </div>
+
+                </>
+              )}
+
+            {currentRole !== "cr" && currentRole !== "admin" && currentRole !== "superadmin" && (
+              <>
+                <span className="text-slate-300 hidden sm:inline">|</span>
+
+                {/* ROLL NUMBER */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500">Roll No:</span>
+
+                  <strong className="text-slate-800">
+                    {activeProfile.rollNo ?? "N/A"}
+                  </strong>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -126,9 +126,9 @@ export const SemesterFolderViewModal: React.FC<SemesterFolderViewModalProps> = (
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
-      <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden my-6">
+      <div className="bg-white rounded-2xl sm:rounded-3xl max-w-4xl w-full min-w-0 max-h-[calc(100dvh-1.5rem)] shadow-2xl border border-slate-200 overflow-hidden my-2 sm:my-6 flex flex-col">
         {/* Top Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 relative">
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 sm:p-6 relative shrink-0">
           <button
             onClick={onClose}
             className="absolute top-5 right-5 text-slate-400 hover:text-white p-1.5 rounded-full hover:bg-white/10 transition-colors z-10"
@@ -279,7 +279,7 @@ export const SemesterFolderViewModal: React.FC<SemesterFolderViewModalProps> = (
         </div>
 
         {/* Tab Body Content */}
-        <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 space-y-4 min-h-0 overflow-y-auto flex-1">
           {/* Imported Tab Special Control Header */}
           {activeTab === 'imported' && importedList.length > 0 && (
             <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3">

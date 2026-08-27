@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CertificateSubmission, Semester, UserProfile, AdminUser } from '../types';
 import { SEMESTER_TARGETS, AICTE_CATEGORIES } from '../constants/aicteData';
-import { generateActivityDiaryPDF } from '../utils/pdfGenerator';
 import { generateStudentActivityExcel } from '../utils/excelGenerator';
 import { getDriveFileWebUrl, getDriveFolderWebUrl } from '../services/driveService';
 import { DriveFetchModal } from './DriveFetchModal';
@@ -31,6 +30,7 @@ import {
   FolderDown,
   FolderSearch,
   RefreshCw,
+  Undo2,
 } from 'lucide-react';
 
 interface StudentDashboardProps {
@@ -86,7 +86,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   // TGM Selector Modal state
   const [isTgmModalOpen, setIsTgmModalOpen] = useState(false);
   const [selectedTgm, setSelectedTgm] = useState<string>(
-    student.tgmId || ''
+    student.tgmId && student.tgGroup ? `${student.tgmId}|${student.tgGroup}` : ''
   );
   const [tgmSaveSuccess, setTgmSaveSuccess] = useState(false);
 
@@ -120,13 +120,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }, 800);
   };
 
-  // Available CRs list based on student division
-  const studentDivision = student.division || 'A';
-  const crUsersFromDb = (allUsers || []).filter((u) => u.role === 'cr' && u.division === studentDivision);
+  // CRs are always scoped by academic batch. Only ST uses divisions.
+  const studentDivision = student.division || '';
+  const crUsersFromDb = (allUsers || []).filter((u) => {
+    if (u.role !== 'cr' || u.academicBatch !== student.academicBatch) return false;
+    return student.academicBatch === '2025-2029' ? u.division === studentDivision : true;
+  });
 
   const availableCrs = crUsersFromDb.length > 0 
-    ? crUsersFromDb.map((u) => ({ id: u.id, name: `${u.name} (CR - Div ${u.division})` }))
-    : [{ id: '', name: `No CR found for Division ${studentDivision}` }];
+    ? crUsersFromDb.map((u) => ({
+        id: u.id,
+        name: student.academicBatch === '2025-2029' ? `${u.name} (Division ${u.division})` : u.name,
+      }))
+    : [{ id: '', name: `No CR found for batch ${student.academicBatch}` }];
 
   const handleSaveCr = async () => {
     if (!selectedCr) return;
@@ -147,16 +153,35 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }, 800);
   };
 
-  // Available TGMs list
-  const tgmUsersFromDb = (allUsers || []).filter((u) => u.role === 'admin' && u.tgmApprovalStatus === 'approved' && (u.division === studentDivision || u.division === 'All IoT Divisions'));
+  // Approved TGMs and their groups come from the users table. `customRole`
+  // stores one or more comma-separated TG groups for faculty profiles.
+  const availableTgms = (allUsers || [])
+    .filter((user) =>
+      user.role === 'admin' &&
+      user.tgmApprovalStatus === 'approved' &&
+      user.academicBatch === student.academicBatch &&
+      (student.academicBatch !== '2025-2029' || user.division === studentDivision)
+    )
+    .flatMap((user) =>
+      (user.customRole || '')
+        .split(',')
+        .map((group) => group.trim())
+        .filter(Boolean)
+        .map((tgGroup) => ({
+          value: `${user.id}|${tgGroup}`,
+          id: user.id,
+          tgGroup,
+          name: `${tgGroup} — ${user.name}`,
+        }))
+    );
 
-  const availableTgms = tgmUsersFromDb.length > 0 
-    ? tgmUsersFromDb.map((u) => ({ id: u.id, name: `${u.name} (TGM)` }))
-    : [{ id: '', name: `No TGM found for Division ${studentDivision}` }];
+  const tgmOptions = availableTgms.length > 0
+    ? availableTgms
+    : [{ value: '', id: '', tgGroup: '', name: `No approved TGM found for batch ${student.academicBatch}` }];
 
   const handleSaveTgm = async () => {
     if (!selectedTgm) return;
-    const selectedTgmObj = availableTgms.find(t => t.id === selectedTgm);
+    const selectedTgmObj = tgmOptions.find(t => t.value === selectedTgm);
     if (!selectedTgmObj) return;
 
     if (onUpdateProfile) {
@@ -164,6 +189,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         ...student,
         tgmId: selectedTgmObj.id,
         tgmName: selectedTgmObj.name,
+        tgGroup: selectedTgmObj.tgGroup,
       });
     }
     setTgmSaveSuccess(true);
@@ -189,8 +215,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return matchesSem && matchesStatus && matchesSearch;
   });
 
-  const getStatusBadge = (status: string, isCheckedByCR: boolean, isVerifiedByTGM: boolean) => {
-    switch (status) {
+  const getStatusBadge = (sub: CertificateSubmission) => {
+    switch (sub.status) {
+      case 'imported':
+        return (
+          <span className="inline-flex items-center gap-1 bg-sky-100 text-sky-800 text-xs px-2.5 py-1 rounded-md font-semibold">
+            Saved — Not Sent for Verification
+          </span>
+        );
       case 'approved':
         return (
           <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-md font-semibold">
@@ -214,15 +246,27 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         );
       case 'resubmission_requested':
         return (
-          <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-800 text-xs px-2.5 py-1 rounded-md font-semibold">
-            <AlertTriangle className="w-3.5 h-3.5 text-orange-600" />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onResubmitRequested(sub);
+            }}
+            className="inline-flex items-center gap-1 bg-orange-600 hover:bg-orange-700 text-white text-xs px-2.5 py-1 rounded-md font-semibold shadow-xs transition-colors cursor-pointer"
+            title="Click to open the re-upload modal"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
             Resubmission Needed
-          </span>
+          </button>
         );
       case 'rejected':
         return (
-          <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-800 text-xs px-2.5 py-1 rounded-md font-semibold">
-            Rejected
+          <span
+            className="inline-flex items-center gap-1 bg-rose-100 text-rose-700 border border-rose-200 text-xs px-2.5 py-1 rounded-md font-semibold"
+            title="This certificate was rejected by the TGM"
+          >
+            <Undo2 className="w-3.5 h-3.5" />
+            Rejected by TGM
           </span>
         );
       default:
@@ -231,9 +275,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-screen-xl mx-auto space-y-6 pt-4 px-4 pb-12 sm:px-6 lg:px-8">
+    <div className="w-full min-w-0 max-w-7xl mx-auto space-y-4 sm:space-y-6 pt-3 sm:pt-4 px-3 pb-10 sm:px-6 lg:px-8">
       {/* Hero Overview Card - Clean Minimalism Style */}
-      <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200 relative overflow-hidden">
+      <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xs border border-slate-200 relative overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2.5 max-w-2xl">
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
@@ -257,7 +301,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </div>
 
           {/* Cumulative Gauge */}
-          <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200 flex flex-col items-center justify-center min-w-[240px]">
+          <div className="w-full lg:w-auto lg:min-w-60 bg-slate-50/80 p-4 sm:p-5 rounded-2xl border border-slate-200 flex flex-col items-center justify-center">
             <div className="text-center">
               <span className="text-4xl font-bold text-slate-900">{totalApprovedPoints}</span>
               <span className="text-slate-400 font-medium text-base"> / 100 Pts</span>
@@ -279,7 +323,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       {/* Assigned Evaluators: Stage-1 CR & Stage-2 TGM */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Stage 1: Assigned CR Card */}
-        <div className="bg-gradient-to-r from-slate-900 via-amber-950 to-slate-900 text-white rounded-2xl p-5 shadow-sm border border-amber-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-linear-to-r from-slate-900 via-amber-950 to-slate-900 text-white rounded-2xl p-5 shadow-sm border border-amber-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3.5">
             <div className="w-11 h-11 bg-amber-600/80 rounded-xl flex items-center justify-center shrink-0 border border-amber-400/30 text-white shadow-xs">
               <UserCheck className="w-6 h-6 text-amber-200" />
@@ -317,7 +361,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
 
         {/* Stage 2: Assigned TGM Card */}
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-5 shadow-sm border border-indigo-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-linear-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-5 shadow-sm border border-indigo-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3.5">
             <div className="w-11 h-11 bg-indigo-600/80 rounded-xl flex items-center justify-center shrink-0 border border-indigo-400/30 text-white shadow-xs">
               <ShieldCheck className="w-6 h-6 text-indigo-200" />
@@ -344,7 +388,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           <button
             id="btn-change-tgm"
             onClick={() => {
-              setSelectedTgm(student.tgmId || availableTgms[0]?.id || '');
+              const currentValue = student.tgmId && student.tgGroup ? `${student.tgmId}|${student.tgGroup}` : '';
+              setSelectedTgm(currentValue || tgmOptions[0]?.value || '');
               setIsTgmModalOpen(true);
             }}
             className="bg-indigo-600/90 hover:bg-indigo-600 text-white border border-indigo-400/40 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-xs"
@@ -410,7 +455,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       </div>
 
       {/* Action Buttons Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-2">
           <Layers className="w-5 h-5 text-indigo-600" />
           <h3 className="font-semibold text-slate-900 text-base">Semester Target Tracker (Sem I - Sem VIII)</h3>
@@ -423,22 +468,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               setDriveFetchModalSem(selectedSemFilter !== 'ALL' ? selectedSemFilter : 'SEM_1');
               setIsDriveFetchModalOpen(true);
             }}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-slate-900 to-indigo-950 hover:from-slate-800 hover:to-indigo-900 text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow-xs transition-colors border border-indigo-500/30 cursor-pointer"
+            className="flex items-center gap-1.5 bg-linear-to-r from-slate-900 to-indigo-950 hover:from-slate-800 hover:to-indigo-900 text-white px-4 py-2.5 rounded-lg text-sm font-bold shadow-xs transition-colors border border-indigo-500/30 cursor-pointer"
           >
             <FolderDown className="w-4 h-4 text-indigo-300" />
             <span>Fetch Files</span>
           </button>
 
 
-
-          <button
-            id="btn-export-pdf"
-            onClick={() => generateActivityDiaryPDF(student, submissions)}
-            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-2.5 rounded-lg text-xs font-semibold shadow-xs transition-colors"
-          >
-            <Download className="w-4 h-4 text-emerald-400" />
-            PDF Report
-          </button>
 
           <button
             id="btn-export-excel"
@@ -565,7 +601,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
       {/* Selected Semester Drive Preview & Action Alert */}
       {selectedSemFilter !== 'ALL' && (
-        <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white p-4 rounded-2xl border border-indigo-500/30 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="bg-linear-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white p-4 rounded-2xl border border-indigo-500/30 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-indigo-600/80 rounded-xl flex items-center justify-center shrink-0 border border-indigo-400/30 text-white">
               <FolderSearch className="w-5 h-5 text-indigo-200" />
@@ -608,6 +644,70 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         </div>
       )}
 
+      {/* TGM Rejection Recovery Banner */}
+      {submissions.some(
+        (s) => s.status === 'rejected' && s.resubmissionRequestedBy === 'tgm'
+      ) && (
+        <div className="bg-linear-to-r from-rose-50 via-amber-50 to-rose-50 border-2 border-rose-200 rounded-2xl p-4 sm:p-5 shadow-xs">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center text-white shrink-0 border border-rose-400/40 shadow-xs">
+                <Undo2 className="w-5 h-5 text-rose-100" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-100 px-2 py-0.5 rounded border border-rose-200">
+                    Action Required
+                  </span>
+                  <span className="text-xs text-rose-700 font-semibold">
+                    {submissions.filter(
+                      (s) =>
+                        s.status === 'rejected' &&
+                        s.resubmissionRequestedBy === 'tgm'
+                    ).length}{' '}
+                    TGM-rejected file(s) need re-submission
+                  </span>
+                </div>
+                <h4 className="text-sm sm:text-base font-bold text-rose-900">
+                  How to recover a TGM-rejected file
+                </h4>
+                <p className="text-xs text-rose-800/80 leading-relaxed max-w-2xl">
+                  Fix the certificate on Google Drive, then either click{' '}
+                  <strong className="text-rose-900">Re-fetch</strong> to pull
+                  the updated file from your Drive folder, or use{' '}
+                  <strong className="text-rose-900">Re-upload</strong> to attach
+                  a different shareable link. After the file is back in your
+                  portfolio, click the new{' '}
+                  <strong className="text-rose-900">Apply for CR</strong> button
+                  to send it to your CR for Stage-1 verification. After CR
+                  approval, it advances to Stage-2{' '}
+                  <strong>TGM verification</strong>.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  const firstRejected = submissions.find(
+                    (s) =>
+                      s.status === 'rejected' &&
+                      s.resubmissionRequestedBy === 'tgm'
+                  );
+                  if (firstRejected) {
+                    setDriveFetchModalSem(firstRejected.semester);
+                    setIsDriveFetchModalOpen(true);
+                  }
+                }}
+                className="bg-rose-600 hover:bg-rose-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                <FolderDown className="w-4 h-4 text-rose-200" />
+                <span>Open Drive Re-fetch</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Submissions Section */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
         {/* Table Controls */}
@@ -622,7 +722,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Search */}
-            <div className="relative min-w-[200px]">
+            <div className="relative w-full md:w-auto md:min-w-50">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
               <input
                 type="text"
@@ -658,13 +758,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <option value="pending_admin">CR Checked ✓ (Pending TGM)</option>
               <option value="pending_cr">Pending CR Check</option>
               <option value="resubmission_requested">Resubmission Needed</option>
+              <option value="rejected">Rejected by TGM (Re-submit via CR)</option>
             </select>
           </div>
         </div>
 
         {/* Submissions Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full min-w-4xl text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50/50 text-slate-400 font-bold border-b border-slate-100 uppercase tracking-wider text-[11px]">
                 <th className="py-3.5 px-4">Semester</th>
@@ -736,12 +837,28 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                       {/* Stage 2 TGM Verification tick */}
                       <td className="py-3.5 px-4 text-center">
-                        {sub.isVerifiedByTGM ? (
+                        {sub.isVerifiedByTGM || sub.status === 'rejected' ? (
                           <span
-                            className="inline-flex items-center gap-0.5 text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full font-semibold text-[11px]"
-                            title={`Verified by ${sub.tgmVerifiedBy || sub.assignedTgmName || student.tgmName || 'TGM'}`}
+                            className={
+                              sub.status === 'rejected'
+                                ? "inline-flex items-center gap-0.5 text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md font-semibold text-[11px]"
+                                : "inline-flex items-center gap-0.5 text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full font-semibold text-[11px]"
+                            }
+                            title={
+                              sub.status === 'rejected'
+                                ? `Rejected by ${sub.tgmVerifiedBy || sub.assignedTgmName || student.tgmName || 'TGM'}`
+                                : `Verified by ${sub.tgmVerifiedBy || sub.assignedTgmName || student.tgmName || 'TGM'}`
+                            }
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" /> TGM ✓
+                            {sub.status === 'rejected' ? (
+                              <>
+                                <X className="w-3 h-3 text-rose-600" /> TGM ✓
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="w-3.5 h-3.5" /> TGM ✓
+                              </>
+                            )}
                           </span>
                         ) : (
                           <span
@@ -754,7 +871,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       </td>
 
                       <td className="py-3.5 px-4">
-                        {getStatusBadge(sub.status, sub.isCheckedByCR, sub.isVerifiedByTGM)}
+                        {getStatusBadge(sub)}
                       </td>
 
                       <td className="py-3.5 px-4 text-right">
@@ -786,6 +903,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                               <History className="w-3 h-3" /> Re-upload
                             </button>
                           )}
+
+                          {sub.status === 'rejected' && (
+                            <button
+                              onClick={() => onResubmitRequested(sub)}
+                              className="flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 rounded-md text-[11px] font-semibold shadow-xs transition-colors"
+                              title="Re-upload a different file"
+                            >
+                              <History className="w-3 h-3" /> Re-upload
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -800,7 +927,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       {/* Select / Change CR Modal */}
       {isCrModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 relative">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-5 relative">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="bg-amber-50 text-amber-600 p-2 rounded-xl border border-amber-100">
@@ -875,7 +1002,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       {/* Select / Change TGM Modal */}
       {isTgmModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5 relative">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-5 relative">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="bg-indigo-50 text-indigo-600 p-2 rounded-xl border border-indigo-100">
@@ -910,8 +1037,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   onChange={(e) => setSelectedTgm(e.target.value)}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:outline-none shadow-2xs cursor-pointer"
                 >
-                  {availableTgms.map((tgm) => (
-                    <option key={`tgm-opt-${tgm.id}`} value={tgm.id}>
+                  {tgmOptions.map((tgm) => (
+                    <option key={`tgm-opt-${tgm.value}`} value={tgm.value}>
                       {tgm.name}
                     </option>
                   ))}
@@ -949,7 +1076,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       {/* Google Drive Root Folder Update Modal */}
       {isDriveFolderModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[calc(100dvh-1.5rem)] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-emerald-100 text-emerald-700 rounded-lg flex items-center justify-center font-bold">
@@ -985,7 +1112,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. https://drive.google.com/drive/folders/1ABC123xyz... or Folder ID"
+                  placeholder="Paste a Google Drive folder link or folder ID"
                   value={driveFolderInput}
                   onChange={(e) => setDriveFolderInput(e.target.value)}
                   className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:outline-none"

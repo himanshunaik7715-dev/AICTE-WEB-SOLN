@@ -14,14 +14,12 @@ interface AuthModalProps {
   activeProfile: UserProfile;
   onSelectProfile: (profile: UserProfile) => void;
   onClose: () => void;
-  onReseedDatabase: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   activeProfile,
   onSelectProfile,
   onClose,
-  onReseedDatabase,
 }) => {
   const [step, setStep] = useState<'login' | 'onboarding'>('login');
 
@@ -86,7 +84,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col">
+      <div className="bg-white rounded-2xl max-w-md w-full max-h-[calc(100dvh-1.5rem)] border border-slate-200 shadow-2xl overflow-y-auto flex flex-col">
         {/* Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
           <div className="flex items-center gap-3">
@@ -109,7 +107,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
+        <div className="p-4 sm:p-6 space-y-4 min-w-0">
           {errorMsg && (
             <div className="bg-rose-50 text-rose-700 p-3 rounded-xl border border-rose-100 text-xs font-medium flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -136,6 +134,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <GoogleLogin
                     onSuccess={handleGoogleSuccess}
                     onError={() => setErrorMsg('Google Sign-In failed or was cancelled.')}
+                    hosted_domain="tcetmumbai.in"
                     theme="outline"
                     size="large"
                     text="signin_with"
@@ -171,7 +170,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 min-[481px]:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-800 mb-1">
                     {role === 'admin' ? 'Faculty ID' : 'Roll No'}

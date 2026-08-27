@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CertificateSubmission, Semester, UserProfile, SubmissionStatus } from '../types';
 import { SEMESTER_TARGETS, AICTE_CATEGORIES } from '../constants/aicteData';
 import { fetchGoogleDriveFolderFiles, parseFileNameConvention } from '../services/driveService';
@@ -30,7 +30,7 @@ interface FetchedFileItem {
   id: string;
   driveFileId: string;
   name: string;
-  categoryNo: number; // 1-15
+  categoryNo: number; // 1-16
   categoryCode: string; // e.g. 'CAT-06'
   title: string;
   hoursSpent: number;
@@ -62,6 +62,12 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isOpen) {
+      setFolderLink(student.driveRootFolderId || '');
+    }
+  }, [isOpen, student.driveRootFolderId]);
+
   if (!isOpen) return null;
 
   const handleFetchFiles = async () => {
@@ -83,7 +89,7 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
           const parsed = parseFileNameConvention(file.name);
           let catCode = parsed.categoryCode || file.categoryCode || 'CAT-06';
           let catNum = parseInt(catCode.replace('CAT-', ''), 10);
-          if (isNaN(catNum) || catNum < 1 || catNum > 15) {
+          if (isNaN(catNum) || catNum < 1 || catNum > 16) {
             catNum = 6;
             catCode = 'CAT-06';
           }
@@ -227,9 +233,9 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-fadeIn">
-      <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-2xl sm:rounded-3xl max-w-3xl w-full min-w-0 shadow-2xl border border-slate-200 flex flex-col max-h-[calc(100dvh-1.5rem)] overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 relative shrink-0">
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 sm:p-6 relative shrink-0">
           <button
             onClick={onClose}
             className="absolute top-5 right-5 text-slate-400 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
@@ -256,7 +262,7 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="p-6 sm:p-8 space-y-8 overflow-y-auto flex-1">
+        <div className="min-w-0 p-4 sm:p-8 space-y-6 sm:space-y-8 overflow-y-auto flex-1">
           {/* Inputs Section */}
           <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
             {/* Drive Folder Link */}
@@ -269,7 +275,7 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
                 type="text"
                 value={folderLink}
                 onChange={(e) => setFolderLink(e.target.value)}
-                placeholder="https://drive.google.com/drive/folders/..."
+                placeholder="Paste a Google Drive folder link"
                 className="w-full bg-white text-slate-900 text-xs px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 font-mono"
               />
             </div>
@@ -450,7 +456,7 @@ export const DriveFetchModal: React.FC<DriveFetchModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="bg-slate-50 p-6 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+        <div className="bg-slate-50 p-4 sm:p-6 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 shrink-0">
           <span className="text-xs text-slate-600 font-medium flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
             Files will be automatically placed into their target Semesters (SEM 1 – SEM 8) as Pending CR Submissions.
