@@ -1085,23 +1085,23 @@ export default function App() {
         <span className="w-1/3 bg-[#1c69d4]" />
         <span className="w-1/3 bg-[#e22718]" />
       </div>
-      <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-4 px-4 py-5 text-center sm:px-6 sm:py-6 md:flex-row md:justify-between md:gap-6 md:px-8 md:py-7 md:text-left lg:px-10">
-        <p className="max-w-full text-xs font-light leading-5 sm:leading-6">
+      <div className="mx-auto flex w-full max-w-7xl flex-col items-center gap-2 px-3 py-3 text-center sm:gap-4 sm:px-6 sm:py-5 md:flex-row md:justify-between md:gap-6 md:px-8 md:py-7 md:text-left lg:px-10">
+        <p className="max-w-full text-[10px] font-light leading-4 sm:text-xs sm:leading-6">
           © 2026 Thakur College of Engineering and Technology. All rights reserved.
         </p>
-        <div className="flex w-full min-w-0 flex-col items-center border-t border-white/20 pt-3 text-[10px] uppercase tracking-[0.1em] sm:w-auto sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-4 sm:pt-4 sm:tracking-[0.14em] md:max-w-[60%] md:justify-end md:border-l md:border-t-0 md:py-0 md:pl-5 md:pt-0">
-          <span className="inline-flex min-h-11 items-center text-[#7e7e7e]">
+        <div className="flex w-full min-w-0 flex-col items-center gap-1 border-t border-white/20 pt-2 text-[9px] uppercase tracking-[0.08em] sm:w-auto sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-4 sm:pt-3 sm:text-[10px] sm:tracking-[0.14em] md:max-w-[60%] md:justify-end md:border-l md:border-t-0 md:py-0 md:pl-5 md:pt-0">
+          <span className="inline-flex items-center text-[#7e7e7e]">
             Technical support
           </span>
           <a
             href="tel:+919561874652"
-            className="inline-flex min-h-11 max-w-full items-center justify-center text-[#e6e6e6] transition-colors hover:text-white md:justify-start"
+            className="inline-flex max-w-full items-center justify-center py-0.5 text-[#e6e6e6] transition-colors hover:text-white sm:py-1 md:justify-start"
           >
             Call 9561874652
           </a>
           <a
             href="mailto:1032250476@tcetmumbai.in"
-            className="inline-flex min-h-11 max-w-full items-center justify-center break-all text-[#e6e6e6] normal-case tracking-normal transition-colors hover:text-white md:justify-start md:break-normal"
+            className="inline-flex max-w-full items-center justify-center break-all py-0.5 text-[#e6e6e6] normal-case tracking-normal transition-colors hover:text-white sm:py-1 md:justify-start md:break-normal"
           >
             1032250476@tcetmumbai.in
           </a>
