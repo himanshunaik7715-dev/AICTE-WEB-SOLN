@@ -1089,19 +1089,19 @@ export default function App() {
         <p className="max-w-full text-[10px] font-light leading-4 sm:text-xs sm:leading-6">
           © 2026 Thakur College of Engineering and Technology. All rights reserved.
         </p>
-        <div className="flex w-full min-w-0 flex-col items-center gap-1 border-t border-white/20 pt-2 text-[9px] uppercase tracking-[0.08em] sm:w-auto sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-4 sm:pt-3 sm:text-[10px] sm:tracking-[0.14em] md:max-w-[60%] md:justify-end md:border-l md:border-t-0 md:py-0 md:pl-5 md:pt-0">
-          <span className="inline-flex items-center text-[#7e7e7e]">
-            Technical support
+        <div className="flex w-full min-w-0 flex-nowrap items-center justify-center gap-2 border-t border-white/20 pt-2 text-[8px] uppercase tracking-normal sm:w-auto sm:gap-4 sm:pt-3 sm:text-[10px] sm:tracking-[0.1em] md:max-w-[65%] md:justify-end md:border-l md:border-t-0 md:py-0 md:pl-5 md:pt-0">
+          <span className="shrink-0 text-[#7e7e7e]">
+            Support
           </span>
           <a
             href="tel:+919561874652"
-            className="inline-flex max-w-full items-center justify-center py-0.5 text-[#e6e6e6] transition-colors hover:text-white sm:py-1 md:justify-start"
+            className="shrink-0 py-0.5 text-[#e6e6e6] transition-colors hover:text-white sm:py-1"
           >
             Call 9561874652
           </a>
           <a
             href="mailto:1032250476@tcetmumbai.in"
-            className="inline-flex max-w-full items-center justify-center break-all py-0.5 text-[#e6e6e6] normal-case tracking-normal transition-colors hover:text-white sm:py-1 md:justify-start md:break-normal"
+            className="min-w-0 py-0.5 text-[#e6e6e6] normal-case tracking-normal transition-colors hover:text-white sm:py-1"
           >
             1032250476@tcetmumbai.in
           </a>
