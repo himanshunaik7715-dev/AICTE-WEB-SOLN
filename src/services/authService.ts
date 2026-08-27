@@ -4,6 +4,7 @@ import { UserProfile, AdminUser } from '../types';
 import { saveUserProfileToDb, addAdminToDb, getUserProfileByEmail, clearDbCaches } from './dbService';
 import { parseStudentUID } from '../utils/parseStudentUID';
 import { isStudentProfileComplete } from '../utils/studentProfile';
+import { apiUrl } from '../lib/api';
 
 export interface AuthState {
   supabaseUser: User | null;
@@ -57,7 +58,7 @@ export async function loginWithGoogle(credential: string): Promise<GoogleLoginRe
 
   const accessToken = data.session?.access_token;
   if (accessToken) {
-    const response = await fetch('/api/auth/bootstrap-profile', {
+    const response = await fetch(apiUrl('/api/auth/bootstrap-profile'), {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
     });

@@ -28,6 +28,7 @@ import {
 
 import { logoutUser } from "./services/authService";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
+import { apiUrl } from "./lib/api";
 import { isStudentProfileComplete } from "./utils/studentProfile";
 
 import { Header } from "./components/Header";
@@ -587,7 +588,7 @@ export default function App() {
         const accessToken = sessionData.session?.access_token;
         if (!accessToken) throw new Error('Authentication required');
         const res = await fetch(
-          "/api/gemini/classify-certificate",
+          apiUrl("/api/gemini/classify-certificate"),
           {
             method: "POST",
             headers: {

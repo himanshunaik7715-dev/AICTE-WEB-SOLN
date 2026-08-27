@@ -48,6 +48,7 @@ The application runs on `http://localhost:3000` by default.
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-public-anon-key
 VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
+VITE_API_BASE_URL=https://your-backend.example.com
 
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-public-anon-key
@@ -62,6 +63,8 @@ NODE_ENV=development
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` must remain server-side. Never expose it through a `VITE_` variable or commit it to Git.
+
+`VITE_API_BASE_URL` is the public Express backend origin used by a separately deployed frontend. It can be omitted locally, where API requests use the same origin.
 
 ## Commands
 

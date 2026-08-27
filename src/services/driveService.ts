@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { apiUrl } from '../lib/api';
 
 /**
  * Google Drive Storage & Integration Helper
@@ -264,7 +265,7 @@ export async function fetchGoogleDriveFolderFiles(
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) throw new Error('Authentication required');
-    const res = await fetch('/api/drive/fetch-folder-files', {
+    const res = await fetch(apiUrl('/api/drive/fetch-folder-files'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ folderUrlOrId, semester }),
