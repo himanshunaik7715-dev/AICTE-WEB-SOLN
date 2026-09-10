@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { ReviewerOption, getReviewerOptions } from '../services/scopeService';
 import { CertificateSubmission, Semester, UserProfile, AdminUser } from '../types';
 import { SEMESTER_TARGETS, AICTE_CATEGORIES } from '../constants/aicteData';
 import { generateStudentActivityExcel } from '../utils/excelGenerator';
@@ -89,6 +90,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     student.tgmId && student.tgGroup ? `${student.tgmId}|${student.tgGroup}` : ''
   );
   const [tgmSaveSuccess, setTgmSaveSuccess] = useState(false);
+  useEffect(() => {
+    setSelectedCr(student.crId || '');
+    setSelectedTgm(student.tgmId && student.tgGroup ? `${student.tgmId}|${student.tgGroup}` : '');
+  }, [student.crId, student.tgmId, student.tgGroup, student.division, student.course, student.department]);
 
   // Google Drive Root Folder Modal state
   const [isDriveFolderModalOpen, setIsDriveFolderModalOpen] = useState(false);
@@ -120,14 +125,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }, 800);
   };
 
-  // CRs are always scoped by academic batch. Only ST uses divisions.
+  const [reviewerOptions, setReviewerOptions] = useState<ReviewerOption[]>([]);
+  const [reviewerError, setReviewerError] = useState('');
+  useEffect(() => {
+    let active = true;
+    setReviewerOptions([]);
+    getReviewerOptions().then(options => { if(active) { setReviewerOptions(options); setReviewerError(''); } }).catch(() => { if(active) setReviewerError('Reviewer options unavailable. Please refresh; do not select an unverified assignment.'); });
+    return () => { active = false; };
+  }, [student.id, student.academicBatch, student.department, student.course, student.division, student.crId, student.tgmId]);
   const studentDivision = student.division || '';
-  const crUsersFromDb = (allUsers || []).filter((u) => {
-    if (u.role !== 'cr' || u.academicBatch !== student.academicBatch) return false;
-    return student.academicBatch === '2025-2029' ? u.division === studentDivision : true;
-  });
-
-  const availableCrs = crUsersFromDb.length > 0 
+  const crUsersFromDb = reviewerOptions.filter(o => o.reviewer_role === 'cr').map(o => ({ id: o.reviewer_id, name: o.name, division: studentDivision }));
+  const availableCrs = crUsersFromDb.length > 0
     ? crUsersFromDb.map((u) => ({
         id: u.id,
         name: student.academicBatch === '2025-2029' ? `${u.name} (Division ${u.division})` : u.name,
@@ -155,26 +163,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   // Approved TGMs and their groups come from the users table. `customRole`
   // stores one or more comma-separated TG groups for faculty profiles.
-  const availableTgms = (allUsers || [])
-    .filter((user) =>
-      user.role === 'admin' &&
-      user.tgmApprovalStatus === 'approved' &&
-      user.academicBatch === student.academicBatch &&
-      (student.academicBatch !== '2025-2029' || user.division === studentDivision)
-    )
-    .flatMap((user) =>
-      (user.customRole || '')
-        .split(',')
-        .map((group) => group.trim())
-        .filter(Boolean)
-        .map((tgGroup) => ({
-          value: `${user.id}|${tgGroup}`,
-          id: user.id,
-          tgGroup,
-          name: `${tgGroup} — ${user.name}`,
-        }))
-    );
-
+  const availableTgms = reviewerOptions.filter(o => o.reviewer_role === 'admin').map(o => ({ value: `${o.reviewer_id}|${o.tg_group}`, id: o.reviewer_id, tgGroup: o.tg_group, name: `${o.tg_group} — ${o.name}` }));
   const tgmOptions = availableTgms.length > 0
     ? availableTgms
     : [{ value: '', id: '', tgGroup: '', name: `No approved TGM found for batch ${student.academicBatch}` }];
@@ -276,6 +265,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   return (
     <div className="w-full min-w-0 max-w-7xl mx-auto space-y-4 sm:space-y-6 pt-3 sm:pt-4 px-3 pb-10 sm:px-6 lg:px-8">
+      {reviewerError && <p role="alert" className="text-sm text-red-700">{reviewerError}</p>}
       {/* Hero Overview Card - Clean Minimalism Style */}
       <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xs border border-slate-200 relative overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">

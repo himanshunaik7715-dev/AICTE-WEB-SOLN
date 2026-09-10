@@ -1,4 +1,5 @@
 import React from "react";
+import { ActivityCategoryGuide } from "./ActivityCategoryGuide";
 import {
   GraduationCap,
   BookOpen,
@@ -118,11 +119,19 @@ export const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({
               </h1>
             </div>
 
-            <p className="max-w-lg text-sm font-light leading-7 text-[#bbbbbb] sm:text-base lg:justify-self-end">
+            <div className="max-w-lg lg:justify-self-end">
+            <p className="text-sm font-light leading-7 text-[#bbbbbb] sm:text-base">
               One verified workspace for activity certificates, structured
               reviews, and semester-wise AICTE point tracking. Continue with
               your assigned institutional role.
             </p>
+            <a
+              href="#activity-category-guide"
+              className="mt-4 inline-block rounded border border-white/30 px-4 py-3 text-sm font-semibold text-white underline underline-offset-4 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+            >
+              View all 16 categories &amp; filename guide
+            </a>
+            </div>
           </div>
 
           <div className="grid border-x border-b border-white/15 md:grid-cols-3">
@@ -180,6 +189,7 @@ export const RoleSelectionPage: React.FC<RoleSelectionPageProps> = ({
             <span>Use an authorised @tcetmumbai.in account</span>
             <span>CR and mentor access requires approval</span>
           </div>
+          <ActivityCategoryGuide />
         </main>
       </div>
     </div>

@@ -1,8 +1,11 @@
+import { fetchDriveFolder } from './backend/driveFolder';
 import express from 'express';
 import path from 'path';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import approveRequest from './api/superadmin/approve-request';
+import rejectRequest from './api/superadmin/reject-request';
 
 dotenv.config();
 
@@ -107,6 +110,15 @@ const requireAuth: express.RequestHandler = async (req, res, next) => {
   next();
 };
 
+const requireApproved: express.RequestHandler = async (_req, res, next) => {
+  if (!serviceClient) return res.status(503).json({error:'Authorization unavailable'});
+  const {data,error}=await serviceClient.from('users').select('role,tgmApprovalStatus').eq('id',res.locals.user.id).maybeSingle();
+  if(error || !data || data.tgmApprovalStatus!=='approved') return res.status(403).json({error:'Approved application access required'});
+  next();
+};
+app.post('/api/superadmin/approve-request', approveRequest);
+app.post('/api/superadmin/reject-request', rejectRequest);
+
 app.post('/api/auth/bootstrap-profile', requireAuth, async (_req, res) => {
   if (!serviceClient) {
     return res.status(503).json({ success: false, error: 'Server authentication is not configured' });
@@ -140,7 +152,6 @@ app.post('/api/auth/bootstrap-profile', requireAuth, async (_req, res) => {
     email,
     role:
       existing?.role === 'superadmin' ||
-      authUser.user_metadata?.seededRole === 'superadmin' ||
       String(whitelist.designation || '').toLowerCase().includes('super admin')
         ? 'superadmin'
         : 'admin',
@@ -248,7 +259,7 @@ app.get('/api/superadmin/dashboard-counts', requireAuth, async (_req, res) => {
 
 app.post(
   '/api/drive/fetch-folder-files',
-  requireAuth,
+  requireAuth, requireApproved,
   async (req, res) => {
     try {
       const {
@@ -311,115 +322,7 @@ app.post(
       // Recursive Drive fetch
       // -------------------------------------------------------
 
-      async function fetchDriveTree(
-        fId: string,
-        currentPath = '',
-        depth = 0
-      ): Promise<any[]> {
-        if (depth > 5) {
-          console.warn(
-            '[Google Drive] Maximum folder depth reached:',
-            currentPath
-          );
-
-          return [];
-        }
-
-        const query =
-          encodeURIComponent(
-            `'${fId}' in parents and trashed=false`
-          );
-
-        const fields =
-          encodeURIComponent(
-            'files(id,name,mimeType,webViewLink,webContentLink,createdTime,modifiedTime,size)'
-          );
-
-        const apiUrl =
-          `https://www.googleapis.com/drive/v3/files` +
-          `?q=${query}` +
-          `&fields=${fields}` +
-          `&pageSize=1000` +
-          `&key=${apiKey}`;
-
-        const response =
-          await fetch(apiUrl);
-
-        if (!response.ok) {
-          const errorBody =
-            await response.text();
-
-          console.error(
-            '[Google Drive] API Error:',
-            response.status,
-            errorBody
-          );
-
-          throw new Error(
-            `Google Drive API error (${response.status}). ` +
-              `Make sure the folder is public ("Anyone with the link can view"). ` +
-              `Details: ${errorBody}`
-          );
-        }
-
-        const json =
-          await response.json();
-
-        const items =
-          json.files || [];
-
-        const collected: any[] = [];
-
-        for (const item of items) {
-          // ---------------------------------------------------
-          // Folder
-          // ---------------------------------------------------
-
-          if (
-            item.mimeType ===
-            'application/vnd.google-apps.folder'
-          ) {
-            const subPath =
-              currentPath
-                ? `${currentPath}/${item.name}`
-                : item.name;
-
-            const children =
-              await fetchDriveTree(
-                item.id,
-                subPath,
-                depth + 1
-              );
-
-            collected.push(
-              ...children
-            );
-          }
-
-          // ---------------------------------------------------
-          // File
-          // ---------------------------------------------------
-
-          else {
-            collected.push({
-              ...item,
-              subfolderPath:
-                currentPath || 'Root',
-            });
-          }
-        }
-
-        return collected;
-      }
-
-      // -------------------------------------------------------
-      // Fetch files
-      // -------------------------------------------------------
-
-      const rawDriveItems =
-        await fetchDriveTree(
-          folderId
-        );
+      const rawDriveItems = await fetchDriveFolder(folderId, apiKey);
 
       // =======================================================
       // PROCESS FILES
@@ -879,7 +782,7 @@ function mapSubfolderToSemester(
 
 app.post(
   '/api/gemini/classify-certificate',
-  requireAuth,
+  requireAuth, requireApproved,
   async (req, res) => {
     try {
       const {
@@ -940,7 +843,7 @@ app.post(
 // FRONTEND / VITE
 // =========================================================
 
-if (!isProduction) {
+if (!process.env.VERCEL && !isProduction) {
   console.log(
     '[Server] Starting Vite development middleware...'
   );
@@ -965,7 +868,7 @@ if (!isProduction) {
   app.use(
     vite.middlewares
   );
-} else {
+} else if (!process.env.VERCEL) {
   const distPath =
     path.resolve(
       process.cwd(),
@@ -1010,7 +913,7 @@ if (!isProduction) {
 // START SERVER
 // =========================================================
 
-app.listen(
+if (!process.env.VERCEL) app.listen(
   PORT,
   '0.0.0.0',
   () => {
@@ -1084,7 +987,7 @@ app.listen(
 // FATAL ERROR HANDLER
 // =========================================================
 
-process.on(
+if (!process.env.VERCEL) process.on(
   'uncaughtException',
   (error) => {
     console.error(
@@ -1094,7 +997,7 @@ process.on(
   }
 );
 
-process.on(
+if (!process.env.VERCEL) process.on(
   'unhandledRejection',
   (reason) => {
     console.error(
@@ -1103,3 +1006,5 @@ process.on(
     );
   }
 );
+
+export default app;

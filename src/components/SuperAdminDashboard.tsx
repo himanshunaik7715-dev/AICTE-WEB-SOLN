@@ -65,12 +65,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       }
     };
 
-    void loadAssignedStudents();
-    const refreshTimer = window.setInterval(() => {
-      void loadAssignedStudents();
-    }, 15_000);
+    void loadAssignedStudents().catch(() => window.dispatchEvent(new CustomEvent('portal-data-error', { detail: 'Unable to refresh administrator counts.' })));
+
     const handleDashboardRefresh = () => {
-      void loadAssignedStudents();
+      void loadAssignedStudents().catch(() => window.dispatchEvent(new CustomEvent('portal-data-error', { detail: 'Unable to refresh administrator counts.' })));
     };
     window.addEventListener('superadmin-dashboard-refresh', handleDashboardRefresh);
     const channel = supabase
@@ -80,7 +78,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
     return () => {
       isMounted = false;
-      window.clearInterval(refreshTimer);
+
       window.removeEventListener('superadmin-dashboard-refresh', handleDashboardRefresh);
       void supabase.removeChannel(channel);
     };
@@ -196,6 +194,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   return (
     <div className="w-full min-w-0 max-w-screen-xl mx-auto space-y-4 sm:space-y-6 pt-3 sm:pt-4 px-3 pb-10 sm:px-6 lg:px-8">
 
+      
       {/* Super Admin Header */}
       <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xs border border-slate-200">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

@@ -1,8 +1,10 @@
 import React, { useState } from "react";
+import { StudentProfileEditor } from './StudentProfileEditor';
 import { UserRole, UserProfile } from "../types";
 import { User, LogOut, Menu, X } from "lucide-react";
 
 interface HeaderProps {
+  onProfileSaved: (profile: UserProfile) => void;
   currentRole: UserRole | "auth";
   onRoleChange: (role: UserRole | "auth") => void;
   activeProfile: UserProfile;
@@ -46,6 +48,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentRole,
   activeProfile,
   onLogout,
+  onProfileSaved,
 }) => {
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
 
@@ -290,11 +293,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="text-slate-500">Course:</span>
 
                   <strong className="text-slate-800">
-                    {currentRole === "cr" || currentRole === "admin"
-                      ? activeProfile.academicBatch === "2025-2029"
-                        ? "B.Tech CSE (Internet of Things)"
-                        : "Internet of Things (IoT)"
-                      : formatCourse(activeProfile.course)}
+                    {formatCourse(activeProfile.course)}
                   </strong>
                 </div>
               </>
@@ -331,6 +330,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <strong className="text-slate-800">
                     {activeProfile.rollNo ?? "N/A"}
                   </strong>
+                  <StudentProfileEditor student={activeProfile} onSaved={onProfileSaved} />
                 </div>
               </>
             )}

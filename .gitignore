@@ -2,6 +2,7 @@ node_modules/
 build/
 dist/
 coverage/
+backend/runtime.mjs
 .DS_Store
 
 # Logs
@@ -18,3 +19,5 @@ src/client_secret_*.json
 # Service-account / credential files
 *service-account*.json
 *credentials*.json
+.vercel
+.env*

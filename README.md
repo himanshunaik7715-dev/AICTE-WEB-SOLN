@@ -33,7 +33,7 @@ Requirements: Node.js 20 or newer and npm.
    ```
 
 3. Create a `.env` file in the project root and configure the required variables listed below.
-4. Apply `supabase-schema.sql` using the Supabase SQL editor.
+4. For an existing database, follow `docs/deployment-status.md`. Never run `supabase-schema.sql` against production: it is a destructive legacy bootstrap used only by the isolated database test. Apply the reviewed numbered migrations in order after backup and live schema inspection.
 5. Start the development server:
 
    ```bash

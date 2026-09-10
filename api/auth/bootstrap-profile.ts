@@ -34,7 +34,6 @@ export default async function handler(req: any, res: any) {
   const { data: existing } = await db.from('users').select('*').eq('email', email).maybeSingle();
   const isSuperadmin =
     existing?.role === 'superadmin' ||
-    authUser.user_metadata?.seededRole === 'superadmin' ||
     String(whitelist.designation || '').toLowerCase().includes('super admin');
   const profile = {
     id: authUser.id,

@@ -188,6 +188,7 @@ export const TGMDashboard: React.FC<TGMDashboardProps> = ({
   return (
     <div className="w-full min-w-0 max-w-screen-xl mx-auto space-y-4 sm:space-y-6 pt-3 sm:pt-4 px-3 pb-10 sm:px-6 lg:px-8">
 
+      
       {/* TGM Identity Header */}
       <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-xs border border-slate-200 relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">

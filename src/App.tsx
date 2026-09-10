@@ -1,3 +1,6 @@
+import { TeacherProfile } from './components/TeacherProfile';
+import { AuthLoadingState } from './components/AuthLoadingState';
+import { assignReviewer, getReviewerOptions, updateStudentProfile } from './services/scopeService';
 import React, { useState, useEffect } from "react";
 import confetti from "canvas-confetti";
 
@@ -67,6 +70,14 @@ export default function App() {
   } | null>(null);
 
   const [sessionRestoring, setSessionRestoring] = useState(true);
+  const [authError, setAuthError] = useState('');
+  const [authAttempt, setAuthAttempt] = useState(0);
+  const [dataError, setDataError] = useState('');
+  useEffect(() => {
+    const listener = (event: Event) => setDataError((event as CustomEvent<string>).detail);
+    window.addEventListener('portal-data-error', listener);
+    return () => window.removeEventListener('portal-data-error', listener);
+  }, []);
 
   const [isSuperAdminRoute, setIsSuperAdminRoute] =
     useState<boolean>(() => {
@@ -129,57 +140,41 @@ export default function App() {
   ------------------------------------------------------- */
 
   useEffect(() => {
-    async function restoreSession() {
+    let cancelled = false;
+    const controller = new AbortController();
+    const deadline = window.setTimeout(() => { if (!cancelled) { cancelled = true; controller.abort(); setAuthError('Session restoration timed out. Please retry.'); setSessionRestoring(false); } }, 15000);
+    const started = performance.now();
+    const timing = (step: string) => { if (import.meta.env.DEV) console.debug(`[auth] ${step}: ${Math.round(performance.now()-started)}ms`); };
+    setSessionRestoring(true); setAuthError(''); timing('AUTH START');
+    async function restore() {
       try {
-        if (!isSupabaseConfigured) {
-          setCurrentRole("auth");
-          return;
-        }
-        const { data, error } = await supabase.auth.getUser();
-        if (error || !data.user?.email) {
-          setCurrentRole("auth");
-          return;
-        }
-        const parsed = await getUserProfileByEmail(data.user.email);
-        if (!parsed || parsed.id !== data.user.id) {
-          setCurrentRole("auth");
-          return;
-        }
-
-        if (parsed.role === "student") {
-          const fresh = await getUserProfileByEmail(parsed.email);
-          const profile = fresh || parsed;
-
-          if (!isStudentProfileComplete(profile)) {
-            setStudentOnboarding({
-              email: profile.email,
-              name: profile.name,
-              existingProfile: profile,
-            });
-            setActiveProfile(profile);
-            setCurrentRole("auth");
-            setSelectedEntryRole("student");
-            return;
-          }
-
-          setActiveProfile(profile);
-          setCurrentRole("student");
-          return;
-        }
-
+        if (!isSupabaseConfigured) throw new Error('Authentication is not configured.');
+        const { data, error } = await supabase.auth.getSession();
+        if (cancelled) return;
+        timing('SESSION RESOLVED');
+        if (error) throw error;
+        if (!data.session) { setCurrentRole('auth'); setActiveProfile(EMPTY_PROFILE); return; }
+        const { data: profile, error: profileError } = await supabase.from('users').select('*').eq('id', data.session.user.id).abortSignal(controller.signal).maybeSingle();
+        if (cancelled) return;
+        if (profileError) throw profileError;
+        if (!profile) throw new Error('Your session is active but no linked profile was found. Contact administration.');
+        timing('PROFILE RESOLVED');
+        const parsed = profile as UserProfile;
         setActiveProfile(parsed);
-        setCurrentRole(parsed.role);
-      } catch (err) {
-        console.error("Failed to restore user session:", err);
-        setCurrentRole("auth");
-      } finally {
-        setSessionRestoring(false);
-      }
+        if (parsed.role === 'student' && !isStudentProfileComplete(parsed)) {
+          setStudentOnboarding({ email: parsed.email, name: parsed.name, existingProfile: parsed });
+          setCurrentRole('auth'); setSelectedEntryRole('student');
+        } else { setStudentOnboarding(null); setCurrentRole(parsed.role); }
+        timing('ROLE RESOLVED');
+      } catch { if (!cancelled) setAuthError('Unable to restore your profile. Retry when your connection is available.'); }
+      finally { window.clearTimeout(deadline); if (!cancelled) setSessionRestoring(false); }
     }
-
-    restoreSession();
-  }, []);
-
+    void restore();
+    const { data: listener } = supabase.auth.onAuthStateChange(event => {
+      if (event === 'SIGNED_OUT') { cancelled = true; controller.abort(); setActiveProfile(EMPTY_PROFILE); setCurrentRole('auth'); setStudentOnboarding(null); setAuthError(''); setSessionRestoring(false); }
+    });
+    return () => { cancelled = true; controller.abort(); window.clearTimeout(deadline); listener.subscription.unsubscribe(); };
+  }, [authAttempt]);
   /* -------------------------------------------------------
      DATABASE STATE
   ------------------------------------------------------- */
@@ -230,6 +225,8 @@ export default function App() {
     const unsubscribeUsers =
       subscribeToUsers(currentRole, activeProfile.id, (data) => {
         setAllUsers(data);
+        const fresh = data.find(user => user.id === activeProfile.id);
+        if (fresh) setActiveProfile(fresh);
       });
 
     return () => {
@@ -265,7 +262,7 @@ export default function App() {
     setCurrentRole(profile.role);
     setStudentOnboarding(null);
 
-    saveUserProfileToDb(profile);
+
   };
 
   const handleStudentOnboardingComplete = (
@@ -395,7 +392,7 @@ export default function App() {
         status: isTgmRejected
           ? "pending_cr"
           : requestedBy === "tgm"
-          ? "pending_admin"
+          ? "pending_cr"
           : requestedBy === "cr"
           ? "pending_cr"
           : "imported",
@@ -631,7 +628,7 @@ export default function App() {
           if (
             isNaN(catNum) ||
             catNum < 1 ||
-            catNum > 15
+            catNum > 16
           ) {
             catNum = 6;
           }
@@ -871,22 +868,28 @@ export default function App() {
       }
     };
 
-  const handleUpdateProfile =
-    async (
-      updatedProfile: UserProfile
-    ) => {
-      setActiveProfile(
-        updatedProfile
-      );
-
-      await saveUserProfileToDb(
-        updatedProfile
-      );
-    };
-
+  const handleUpdateProfile = async (updated: UserProfile) => {
+    let saved = activeProfile;
+    const options = await getReviewerOptions();
+    if (updated.crId !== activeProfile.crId) {
+      const option = options.find(o => o.reviewer_role === 'cr' && o.reviewer_id === updated.crId);
+      if (!option) throw new Error('CR is outside your verified scope. Refresh the options.');
+      saved = await assignReviewer(option.assignment_id);
+    }
+    if (updated.tgmId !== activeProfile.tgmId || updated.tgGroup !== activeProfile.tgGroup) {
+      const option = options.find(o => o.reviewer_role === 'admin' && o.reviewer_id === updated.tgmId && o.tg_group === updated.tgGroup);
+      if (!option) throw new Error('TGM is outside your verified scope. Refresh the options.');
+      saved = await assignReviewer(option.assignment_id);
+    }
+    if (updated.driveRootFolderId !== activeProfile.driveRootFolderId) saved = await updateStudentProfile({ driveRootFolderId: updated.driveRootFolderId });
+    setActiveProfile(saved);
+  };
   /* =======================================================
      RENDER
   ======================================================= */
+
+  if (sessionRestoring || authError) return <AuthLoadingState error={authError} retry={() => setAuthAttempt(x => x + 1)} signOut={() => void handleLogout()} />;
+  if (currentRole !== 'auth' && activeProfile.role !== 'student' && activeProfile.tgmApprovalStatus !== 'approved') return <AuthLoadingState error={`Your account is ${activeProfile.tgmApprovalStatus || 'pending'} administrator approval.`} retry={() => setAuthAttempt(x => x + 1)} signOut={() => void handleLogout()}>{activeProfile.role === 'admin' && <TeacherProfile userId={activeProfile.id} />}</AuthLoadingState>;
 
   return (
   <div className="flex min-h-screen flex-col bg-slate-100 text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white">
@@ -894,6 +897,7 @@ export default function App() {
     {/* Global Navigation Header */}
     {currentRole !== "auth" && (
       <Header
+        onProfileSaved={setActiveProfile}
         currentRole={currentRole}
         onRoleChange={setCurrentRole}
         activeProfile={activeProfile}
@@ -908,6 +912,7 @@ export default function App() {
 
     {/* Main Content */}
     <main className="flex min-h-0 flex-1 w-full min-w-0 flex-col">
+      {dataError && <p role="alert" className="bg-amber-50 p-4 text-amber-900">{dataError} <button onClick={() => window.location.reload()} className="underline">Retry</button></p>}
 
       {/* Student first-time onboarding */}
       {studentOnboarding && (
@@ -949,34 +954,7 @@ export default function App() {
       {/* CR */}
       {currentRole === "cr" && (
         <CRReviewPortal
-          submissions={submissions.filter(s => {
-            const studentUser = allUsers.find(
-              (u) => u.id === s.studentId || u.erpNo === s.studentErpNo
-            );
-
-            // 1) Student explicitly assigned this CR.
-            if (studentUser?.crId === activeProfile.id) {
-              return true;
-            }
-
-            // 2) Fallback: same division (and batch when known).
-            //    This covers students who have not yet picked a CR.
-            const crDivision = (activeProfile.division || "").trim();
-            const crBatch = (activeProfile.academicBatch || "").trim();
-
-            const sameDivision =
-              crDivision === "" ||
-              crDivision === "All Divisions" ||
-              s.studentDivision === crDivision;
-
-            const sameBatch =
-              crBatch === "" ||
-              !studentUser ||
-              !studentUser.academicBatch ||
-              studentUser.academicBatch === crBatch;
-
-            return sameDivision && sameBatch;
-          })}
+          submissions={submissions}
           activeProfile={activeProfile}
           onValidateByCR={handleValidateByCR}
           onRequestResubmission={handleRequestResubmissionByCR}
