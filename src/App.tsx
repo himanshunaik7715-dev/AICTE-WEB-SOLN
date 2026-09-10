@@ -1,4 +1,3 @@
-import { TeacherProfile } from './components/TeacherProfile';
 import { AuthLoadingState } from './components/AuthLoadingState';
 import { assignReviewer, getReviewerOptions, updateStudentProfile } from './services/scopeService';
 import React, { useState, useEffect } from "react";
@@ -889,7 +888,7 @@ export default function App() {
   ======================================================= */
 
   if (sessionRestoring || authError) return <AuthLoadingState error={authError} retry={() => setAuthAttempt(x => x + 1)} signOut={() => void handleLogout()} />;
-  if (currentRole !== 'auth' && activeProfile.role !== 'student' && activeProfile.tgmApprovalStatus !== 'approved') return <AuthLoadingState error={`Your account is ${activeProfile.tgmApprovalStatus || 'pending'} administrator approval.`} retry={() => setAuthAttempt(x => x + 1)} signOut={() => void handleLogout()}>{activeProfile.role === 'admin' && <TeacherProfile userId={activeProfile.id} />}</AuthLoadingState>;
+  if (currentRole !== 'auth' && activeProfile.role !== 'student' && activeProfile.tgmApprovalStatus !== 'approved') return <AuthLoadingState error={`Your account is ${activeProfile.tgmApprovalStatus || 'pending'} administrator approval.`} retry={() => setAuthAttempt(x => x + 1)} signOut={() => void handleLogout()}></AuthLoadingState>;
 
   return (
   <div className="flex min-h-screen flex-col bg-slate-100 text-slate-900 font-sans antialiased selection:bg-indigo-500 selection:text-white">
